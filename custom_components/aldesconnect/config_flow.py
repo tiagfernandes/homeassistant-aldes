@@ -1,20 +1,22 @@
-"""Adds config flow for Blueprint."""
+"""Adds config flow for AldesConnect."""
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 import voluptuous as vol
 
-from .api import IntegrationBlueprintApiClient
+from .api import AldesConnectApi
 from .const import (
     CONF_PASSWORD,
     CONF_USERNAME,
     DOMAIN,
-    PLATFORMS,
 )
 
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
-class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for Blueprint."""
+
+class AldesConnectFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for AldesConnect."""
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
@@ -27,9 +29,8 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle a flow initialized by the user."""
         self._errors = {}
 
-        # Uncomment the next 2 lines if only a single instance of the integration is allowed:
-        # if self._async_current_entries():
-        #     return self.async_abort(reason="single_instance_allowed")
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
 
         if user_input is not None:
             valid = await self._test_credentials(
@@ -39,9 +40,7 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=user_input[CONF_USERNAME], data=user_input
                 )
-            else:
-                self._errors["base"] = "auth"
-
+            self._errors["base"] = "auth"
             return await self._show_config_form(user_input)
 
         user_input = {}
@@ -54,7 +53,7 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return BlueprintOptionsFlowHandler(config_entry)
+        return AldesConnectOptionsFlowHandler(config_entry)
 
     async def _show_config_form(self, user_input):  # pylint: disable=unused-argument
         """Show the configuration form to edit location data."""
@@ -73,16 +72,16 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Return true if credentials is valid."""
         try:
             session = async_create_clientsession(self.hass)
-            client = IntegrationBlueprintApiClient(username, password, session)
-            await client.async_get_data()
+            api = AldesConnectApi(username, password, session)
+            await api.authenticate()
             return True
         except Exception:  # pylint: disable=broad-except
             pass
         return False
 
 
-class BlueprintOptionsFlowHandler(config_entries.OptionsFlow):
-    """Blueprint config flow options handler."""
+class AldesConnectOptionsFlowHandler(config_entries.OptionsFlow):
+    """AldesConnect config flow options handler."""
 
     def __init__(self, config_entry):
         """Initialize HACS options flow."""
