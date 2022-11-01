@@ -1,7 +1,6 @@
 """Adds config flow for AldesConnect."""
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 import voluptuous as vol
 
@@ -10,9 +9,8 @@ from .const import (
     CONF_PASSWORD,
     CONF_USERNAME,
     DOMAIN,
+    PLATFORMS,
 )
-
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 
 class AldesConnectFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):

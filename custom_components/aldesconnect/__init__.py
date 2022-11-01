@@ -5,15 +5,12 @@ For more details about this integration, please refer to
 https://github.com/guix77/homeassistant-aldesconnect
 """
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import aiohttp_client
 
 from .api import AldesConnectApi
-from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN
+from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN, PLATFORMS
 from .coordinator import AldesConnectDataUpdateCoordinator
-
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
