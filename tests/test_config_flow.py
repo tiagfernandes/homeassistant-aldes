@@ -5,7 +5,7 @@ from homeassistant import config_entries, data_entry_flow
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.integration_blueprint.const import (
+from custom_components.aldesconnect.const import (
     BINARY_SENSOR,
     DOMAIN,
     PLATFORMS,
