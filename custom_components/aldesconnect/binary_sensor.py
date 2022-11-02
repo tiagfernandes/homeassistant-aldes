@@ -15,19 +15,23 @@ async def async_setup_entry(
     """Add AldesConnect binary sensors from a config_entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    binary_sensors: list[AldesConnectBinarySensor] = []
+    binary_sensors: list[AldesConnectBinarySensorEntity] = []
 
     for product in coordinator.data:
         binary_sensors.append(
-            AldesConnectBinarySensor(
-                coordinator, entry, product["serial_number"], product["reference"]
+            AldesConnectBinarySensorEntity(
+                coordinator,
+                entry,
+                product["serial_number"],
+                product["reference"],
+                product["modem"],
             )
         )
 
     async_add_entities(binary_sensors)
 
 
-class AldesConnectBinarySensor(AldesConnectEntity, BinarySensorEntity):
+class AldesConnectBinarySensorEntity(AldesConnectEntity, BinarySensorEntity):
     """Define an AldesConnect binary sensor."""
 
     _attr_device_class = "connectivity"

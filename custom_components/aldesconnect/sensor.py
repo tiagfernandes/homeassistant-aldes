@@ -16,16 +16,17 @@ async def async_setup_entry(
     """Add AldesConnect sensors from a config_entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    sensors: list[AldesConnectSensor] = []
+    sensors: list[AldesConnectSensorEntity] = []
 
     for product in coordinator.data:
         for thermostat in product["indicator"]["thermostats"]:
             sensors.append(
-                AldesConnectSensor(
+                AldesConnectSensorEntity(
                     coordinator,
                     entry,
                     product["serial_number"],
                     product["reference"],
+                    product["modem"],
                     thermostat["ThermostatId"],
                 )
             )
@@ -33,13 +34,21 @@ async def async_setup_entry(
     async_add_entities(sensors)
 
 
-class AldesConnectSensor(AldesConnectEntity, SensorEntity):
+class AldesConnectSensorEntity(AldesConnectEntity, SensorEntity):
     """Define an AldesConnect sensor."""
 
     def __init__(
-        self, coordinator, config_entry, product_serial_number, reference, thermostat_id
+        self,
+        coordinator,
+        config_entry,
+        product_serial_number,
+        reference,
+        modem,
+        thermostat_id,
     ):
-        super().__init__(coordinator, config_entry, product_serial_number, reference)
+        super().__init__(
+            coordinator, config_entry, product_serial_number, reference, modem
+        )
         self.thermostat_id = thermostat_id
         self._attr_device_class = "temperature"
         self._attr_native_unit_of_measurement = TEMP_CELSIUS
@@ -56,7 +65,7 @@ class AldesConnectSensor(AldesConnectEntity, SensorEntity):
     @property
     def unique_id(self):
         """Return a unique ID to use for this entity."""
-        return f"{DOMAIN}_{self.product_serial_number}_{self.thermostat_id}_temperature"
+        return f"{DOMAIN}_{self.thermostat_id}_temperature"
 
     @property
     def name(self):

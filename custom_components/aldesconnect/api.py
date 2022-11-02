@@ -42,6 +42,23 @@ class AldesConnectApi:
         ) as response:
             return await response.json()
 
+    async def set_target_temperature(
+        self, modem, thermostat_id, thermostat_name, target_temperature
+    ):
+        """Set target temperature."""
+        async with await self._request_with_auth_interceptor(
+            self._session.patch,
+            f"{self._API_URL_PRODUCTS}/{modem}/updateThermostats",
+            json=[
+                {
+                    "ThermostatId": thermostat_id,
+                    "Name": thermostat_name,
+                    "TemperatureSet": int(target_temperature),
+                }
+            ],
+        ) as response:
+            return await response.json()
+
     async def _request_with_auth_interceptor(self, request, url, **kwargs):
         """Provide authentication to request."""
         initial_response = await request(
