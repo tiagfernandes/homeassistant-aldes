@@ -1,9 +1,9 @@
-"""AldesConnectEntity class"""
+"""AldesEntity class"""
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 
-class AldesConnectEntity(CoordinatorEntity):
-    """AldesConnect entity"""
+class AldesEntity(CoordinatorEntity):
+    """Aldes entity"""
 
     def __init__(
         self, coordinator, config_entry, product_serial_number, reference, modem

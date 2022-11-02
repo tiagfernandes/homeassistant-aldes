@@ -1,10 +1,10 @@
-"""Adds config flow for AldesConnect."""
+"""Adds config flow for Aldes."""
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 import voluptuous as vol
 
-from .api import AldesConnectApi
+from .api import AldesApi
 from .const import (
     CONF_PASSWORD,
     CONF_USERNAME,
@@ -13,8 +13,8 @@ from .const import (
 )
 
 
-class AldesConnectFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for AldesConnect."""
+class AldesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for Aldes."""
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
@@ -51,7 +51,7 @@ class AldesConnectFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return AldesConnectOptionsFlowHandler(config_entry)
+        return AldesOptionsFlowHandler(config_entry)
 
     async def _show_config_form(self, user_input):  # pylint: disable=unused-argument
         """Show the configuration form to edit location data."""
@@ -70,7 +70,7 @@ class AldesConnectFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Return true if credentials is valid."""
         try:
             session = async_create_clientsession(self.hass)
-            api = AldesConnectApi(username, password, session)
+            api = AldesApi(username, password, session)
             await api.authenticate()
             return True
         except Exception:  # pylint: disable=broad-except
@@ -78,8 +78,8 @@ class AldesConnectFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return False
 
 
-class AldesConnectOptionsFlowHandler(config_entries.OptionsFlow):
-    """AldesConnect config flow options handler."""
+class AldesOptionsFlowHandler(config_entries.OptionsFlow):
+    """Aldes config flow options handler."""
 
     def __init__(self, config_entry):
         """Initialize HACS options flow."""

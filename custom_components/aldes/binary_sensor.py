@@ -1,4 +1,4 @@
-"""Support for the AldesConnect binary sensors."""
+"""Support for the Aldes binary sensors."""
 from __future__ import annotations
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
@@ -6,20 +6,20 @@ from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 from .const import DOMAIN, MANUFACTURER, FRIENDLY_NAMES
-from .entity import AldesConnectEntity
+from .entity import AldesEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Add AldesConnect binary sensors from a config_entry."""
+    """Add Aldes binary sensors from a config_entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    binary_sensors: list[AldesConnectBinarySensorEntity] = []
+    binary_sensors: list[AldesBinarySensorEntity] = []
 
     for product in coordinator.data:
         binary_sensors.append(
-            AldesConnectBinarySensorEntity(
+            AldesBinarySensorEntity(
                 coordinator,
                 entry,
                 product["serial_number"],
@@ -31,8 +31,8 @@ async def async_setup_entry(
     async_add_entities(binary_sensors)
 
 
-class AldesConnectBinarySensorEntity(AldesConnectEntity, BinarySensorEntity):
-    """Define an AldesConnect binary sensor."""
+class AldesBinarySensorEntity(AldesEntity, BinarySensorEntity):
+    """Define an Aldes binary sensor."""
 
     _attr_device_class = "connectivity"
 

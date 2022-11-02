@@ -3,8 +3,8 @@ from typing import Dict
 import aiohttp
 
 
-class AldesConnectApi:
-    """AldesConnect API client."""
+class AldesApi:
+    """Aldes API client."""
 
     _API_URL_TOKEN = "https://aldesiotsuite-aldeswebapi.azurewebsites.net/oauth2/token"
     _API_URL_PRODUCTS = "https://aldesiotsuite-aldeswebapi.azurewebsites.net/aldesoc/v5/users/me/products"  # pylint: disable=line-too-long

@@ -5,8 +5,8 @@ from homeassistant.components.switch import SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.const import ATTR_ENTITY_ID
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.aldesconnect import async_setup_entry
-from custom_components.aldesconnect.const import DEFAULT_NAME, DOMAIN, SWITCH
+from custom_components.aldes import async_setup_entry
+from custom_components.aldes.const import DEFAULT_NAME, DOMAIN, SWITCH
 
 from .const import MOCK_CONFIG
 

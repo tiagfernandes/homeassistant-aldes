@@ -1,27 +1,31 @@
-"""Support for the AldesConnect sensors."""
+"""Support for the Aldes sensors."""
 from __future__ import annotations
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import TEMP_CELSIUS
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import ATTR_TEMPERATURE, TEMP_CELSIUS
+from homeassistant.components.climate import (
+    ClimateEntity,
+    ClimateEntityFeature,
+    HVACMode,
+)
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
-from .const import DOMAIN, MANUFACTURER
-from .entity import AldesConnectEntity
+from .const import DOMAIN
+from .entity import AldesEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Add AldesConnect sensors from a config_entry."""
+    """Add Aldes sensors from a config_entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    sensors: list[AldesConnectSensorEntity] = []
+    sensors: list[AldesClimateEntity] = []
 
     for product in coordinator.data:
         for thermostat in product["indicator"]["thermostats"]:
             sensors.append(
-                AldesConnectSensorEntity(
+                AldesClimateEntity(
                     coordinator,
                     entry,
                     product["serial_number"],
@@ -34,8 +38,8 @@ async def async_setup_entry(
     async_add_entities(sensors)
 
 
-class AldesConnectSensorEntity(AldesConnectEntity, SensorEntity):
-    """Define an AldesConnect sensor."""
+class AldesClimateEntity(AldesEntity, ClimateEntity):
+    """Define an Aldes sensor."""
 
     def __init__(
         self,
@@ -51,21 +55,23 @@ class AldesConnectSensorEntity(AldesConnectEntity, SensorEntity):
         )
         self.thermostat_id = thermostat_id
         self._attr_device_class = "temperature"
-        self._attr_native_unit_of_measurement = TEMP_CELSIUS
+        self._attr_temperature_unit = TEMP_CELSIUS
+        self._attr_hvac_mode = HVACMode.OFF
+        self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
+        self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+        self._attr_target_temperature_step = 1
 
     @property
     def device_info(self):
         """Return the device info."""
         return DeviceInfo(
             identifiers={(DOMAIN, self.thermostat_id)},
-            manufacturer=MANUFACTURER,
-            name=f"Thermostat {self.thermostat_id}",
         )
 
     @property
     def unique_id(self):
         """Return a unique ID to use for this entity."""
-        return f"{DOMAIN}_{self.thermostat_id}_temperature"
+        return f"{DOMAIN}_{self.thermostat_id}_climate"
 
     @property
     def name(self):
@@ -74,7 +80,17 @@ class AldesConnectSensorEntity(AldesConnectEntity, SensorEntity):
             if product["serial_number"] == self.product_serial_number:
                 for thermostat in product["indicator"]["thermostats"]:
                     if thermostat["ThermostatId"] == self.thermostat_id:
-                        return f"{thermostat['Name']} temperature"
+                        return f"{thermostat['Name']} climate"
+            return None
+
+    @property
+    def thermostat_name(self):
+        """Get the thermostat name as defined i the API"""
+        for product in self.coordinator.data:
+            if product["serial_number"] == self.product_serial_number:
+                for thermostat in product["indicator"]["thermostats"]:
+                    if thermostat["ThermostatId"] == self.thermostat_id:
+                        return thermostat["Name"]
             return None
 
     @callback
@@ -88,6 +104,20 @@ class AldesConnectSensorEntity(AldesConnectEntity, SensorEntity):
         """Update binary sensor attributes."""
         for product in self.coordinator.data:
             if product["serial_number"] == self.product_serial_number:
+                if product["indicator"]["current_air_mode"] == "C":
+                    self._attr_hvac_mode = HVACMode.HEAT
                 for thermostat in product["indicator"]["thermostats"]:
                     if thermostat["ThermostatId"] == self.thermostat_id:
-                        self._attr_native_value = thermostat["CurrentTemperature"]
+                        self._attr_target_temperature = thermostat["TemperatureSet"]
+                        self._attr_current_temperature = thermostat[
+                            "CurrentTemperature"
+                        ]
+
+    async def async_set_temperature(self, **kwargs):
+        """Set new target temperature."""
+        await self.coordinator.api.set_target_temperature(
+            self.modem,
+            self.thermostat_id,
+            self.thermostat_name,
+            kwargs.get(ATTR_TEMPERATURE),
+        )

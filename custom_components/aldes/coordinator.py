@@ -1,4 +1,4 @@
-"""AldesConnect"""
+"""Aldes"""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -9,18 +9,18 @@ import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import AldesConnectApi
+from .api import AldesApi
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class AldesConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """AldesConnect data coordinator."""
+class AldesDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Aldes data coordinator."""
 
     _API_TIMEOUT = 10
 
-    def __init__(self, hass: HomeAssistant, api: AldesConnectApi):
+    def __init__(self, hass: HomeAssistant, api: AldesApi):
         """Initialize."""
         super().__init__(
             hass,

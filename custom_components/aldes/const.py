@@ -1,8 +1,8 @@
-"""Constants for aldesconnect."""
+"""Constants for aldes."""
 from homeassistant.const import Platform
 
-NAME = "AldesConnect"
-DOMAIN = "aldesconnect"
+NAME = "Aldes"
+DOMAIN = "aldes"
 VERSION = "0.0.1"
 
 CONF_USERNAME = "username"

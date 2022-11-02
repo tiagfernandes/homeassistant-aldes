@@ -1,0 +1,13 @@
+{
+  "domain": "aldes",
+  "name": "Aldes",
+  "version": "1.0.0",
+  "integration_type": "hub",
+  "documentation": "https://github.com/guix77/homeassistant-aldes",
+  "issue_tracker": "https://github.com/guix77/homeassistant-aldes/issues",
+  "codeowners": [
+    "@guix77"
+  ],
+  "config_flow": true,
+  "iot_class": "cloud_polling"
+}

@@ -2,8 +2,8 @@
     "config": {
         "step": {
             "user": {
-                "title": "AldesConnect",
-                "description": "Si vous avez besoin d'aide pour la configuration, regardez ici: https://github.com/guix77/homeassistant-aldesconnect",
+                "title": "Aldes",
+                "description": "Si vous avez besoin d'aide pour la configuration, regardez ici: https://github.com/guix77/homeassistant-aldes",
                 "data": {
                     "username": "Identifiant",
                     "password": "Mot de Passe"
