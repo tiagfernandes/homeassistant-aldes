@@ -16,16 +16,5 @@
         "abort": {
             "single_instance_allowed": "Only a single instance is allowed."
         }
-    },
-    "options": {
-        "step": {
-            "user": {
-                "data": {
-                    "binary_sensor": "Binary sensor enabled",
-                    "sensor": "Sensor enabled",
-                    "switch": "Switch enabled"
-                }
-            }
-        }
     }
 }
