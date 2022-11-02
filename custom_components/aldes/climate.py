@@ -84,13 +84,21 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             return None
 
     @property
-    def thermostat_name(self):
-        """Get the thermostat name as defined i the API"""
+    def min_temp(self):
+        """Get the maximum temperature"""
         for product in self.coordinator.data:
             if product["serial_number"] == self.product_serial_number:
-                for thermostat in product["indicator"]["thermostats"]:
-                    if thermostat["ThermostatId"] == self.thermostat_id:
-                        return thermostat["Name"]
+                if product["indicator"]["current_air_mode"] == "C":
+                    return product["indicator"]["cmist"]
+            return None
+
+    @property
+    def max_temp(self):
+        """Get the maximum temperature"""
+        for product in self.coordinator.data:
+            if product["serial_number"] == self.product_serial_number:
+                if product["indicator"]["current_air_mode"] == "C":
+                    return product["indicator"]["cmast"]
             return None
 
     @callback
@@ -118,6 +126,16 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         await self.coordinator.api.set_target_temperature(
             self.modem,
             self.thermostat_id,
-            self.thermostat_name,
+            self._thermostat_name,
             kwargs.get(ATTR_TEMPERATURE),
         )
+
+    @property
+    def _thermostat_name(self):
+        """Get the thermostat name as defined i the API"""
+        for product in self.coordinator.data:
+            if product["serial_number"] == self.product_serial_number:
+                for thermostat in product["indicator"]["thermostats"]:
+                    if thermostat["ThermostatId"] == self.thermostat_id:
+                        return thermostat["Name"]
+            return None
