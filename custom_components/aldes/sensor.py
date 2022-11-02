@@ -90,4 +90,6 @@ class AldesSensorEntity(AldesEntity, SensorEntity):
             if product["serial_number"] == self.product_serial_number:
                 for thermostat in product["indicator"]["thermostats"]:
                     if thermostat["ThermostatId"] == self.thermostat_id:
-                        self._attr_native_value = thermostat["CurrentTemperature"]
+                        self._attr_native_value = round(
+                            thermostat["CurrentTemperature"], 1
+                        )
