@@ -89,6 +89,8 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         """Get the maximum temperature"""
         for product in self.coordinator.data:
             if product["serial_number"] == self.product_serial_number:
+                if product["indicator"]["current_air_mode"] == "B":
+                    return product["indicator"]["cmist"]
                 if product["indicator"]["current_air_mode"] == "C":
                     return product["indicator"]["cmist"]
             return None
@@ -98,6 +100,8 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         """Get the maximum temperature"""
         for product in self.coordinator.data:
             if product["serial_number"] == self.product_serial_number:
+                if product["indicator"]["current_air_mode"] == "B":
+                    return product["indicator"]["cmast"]
                 if product["indicator"]["current_air_mode"] == "C":
                     return product["indicator"]["cmast"]
             return None
@@ -113,6 +117,8 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         """Update binary sensor attributes."""
         for product in self.coordinator.data:
             if product["serial_number"] == self.product_serial_number:
+                if product["indicator"]["current_air_mode"] == "B":
+                    self._attr_hvac_mode = HVACMode.HEAT
                 if product["indicator"]["current_air_mode"] == "C":
                     self._attr_hvac_mode = HVACMode.HEAT
                 for thermostat in product["indicator"]["thermostats"]:
