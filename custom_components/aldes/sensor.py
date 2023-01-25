@@ -87,9 +87,12 @@ class AldesSensorEntity(AldesEntity, SensorEntity):
     def _async_update_attrs(self) -> None:
         """Update binary sensor attributes."""
         for product in self.coordinator.data:
-            if product["serial_number"] == self.product_serial_number:
-                for thermostat in product["indicator"]["thermostats"]:
-                    if thermostat["ThermostatId"] == self.thermostat_id:
-                        self._attr_native_value = round(
-                            thermostat["CurrentTemperature"], 1
-                        )
+            if product["isConnected"]:
+                if product["serial_number"] == self.product_serial_number:
+                    for thermostat in product["indicator"]["thermostats"]:
+                        if thermostat["ThermostatId"] == self.thermostat_id:
+                            self._attr_native_value = round(
+                                thermostat["CurrentTemperature"], 1
+                            )
+            else:
+                self._attr_native_value = None
