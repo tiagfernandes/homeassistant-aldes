@@ -2,6 +2,8 @@
 
 This integration allows Home Assistant to fetch and modify data from Aldes products through an AldesConnect box.
 
+**Warning:** This integration is barely usable, given AldesConnect deep connectivity issues, even with the official mobile app (see the PlayStore comments for instance). Also, the API lacks several important features which makes this integration a lesser one.
+
 ## Supported products
 
 ### T.One® AIR
