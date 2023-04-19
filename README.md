@@ -31,3 +31,7 @@ The username and password asked during the configuration are the same that you u
 ## Development
 
 This integration is based on https://github.com/custom-components/integration_blueprint
+
+## Credits
+
+Some code was inspired from https://github.com/aalmazanarbs/hassio_aldes, thanks!
