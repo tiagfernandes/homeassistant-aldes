@@ -1,3 +1,5 @@
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+
 # Aldes integration for Home Assistant
 
 This integration allows Home Assistant to fetch and modify data from Aldes products through an AldesConnect box.
