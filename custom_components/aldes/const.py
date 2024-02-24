@@ -11,4 +11,4 @@ CONF_PASSWORD = "password"
 MANUFACTURER = "Aldes"
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.CLIMATE]
 
-FRIENDLY_NAMES = {"TONE_AIR": "T.One® AIR"}
+FRIENDLY_NAMES = {"TONE_AIR": "T.One® AIR", "TONE_AQUA_AIR": "T.One® AquaAIR"}
