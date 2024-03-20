@@ -1,3 +1,5 @@
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+
 # Aldes integration for Home Assistant
 
 This integration allows Home Assistant to fetch and modify data from Aldes products through an AldesConnect box.
@@ -24,7 +26,9 @@ I can't develop support for other products since I don't have them. But you can 
 
 ## Installation
 
-This integration is available through HACS.
+In HACS, add the custom repository https://github.com/guix77/homeassistant-aldes and select the Integration category.
+
+## Configuration
 
 The username and password asked during the configuration are the same that you use for the Aldes mobile app.
 
@@ -35,3 +39,7 @@ This integration is based on https://github.com/custom-components/integration_bl
 ## Credits
 
 Some code was inspired from https://github.com/aalmazanarbs/hassio_aldes, thanks!
+
+## See also
+
+- https://github.com/Fredzxda/homeassistant-aldes for EASYHOME PureAir Compact CONNECT
