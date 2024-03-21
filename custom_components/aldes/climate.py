@@ -124,10 +124,14 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         for product in self.coordinator.data:
             if product["isConnected"]:
                 if product["serial_number"] == self.product_serial_number:
-                    if product["indicator"]["current_air_mode"] == "B":
+                    if product["indicator"]["current_air_mode"] in ["A"]:
+                        self._attr_hvac_mode = HVACMode.OFF
+                    if product["indicator"]["current_air_mode"] in ["B", "C"]:
                         self._attr_hvac_mode = HVACMode.HEAT
-                    if product["indicator"]["current_air_mode"] == "C":
+                    if product["indicator"]["current_air_mode"] in ["F", "G"]:
                         self._attr_hvac_mode = HVACMode.COOL
+                    if product["indicator"]["current_air_mode"] in ["D", "E", "H", "I"]:
+                        self._attr_hvac_mode = HVACMode.AUTO
                     for thermostat in product["indicator"]["thermostats"]:
                         if thermostat["ThermostatId"] == self.thermostat_id:
                             self._attr_target_temperature = thermostat["TemperatureSet"]
@@ -148,7 +152,18 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         self._attr_target_temperature = kwargs.get(ATTR_TEMPERATURE)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        return
+        """Set new HVAC mode."""
+        if hvac_mode in [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]:
+            if hvac_mode == HVACMode.OFF:
+                mode = "A"
+            elif hvac_mode == HVACMode.HEAT:
+                mode = "B"
+            elif hvac_mode == HVACMode.COOL:
+                mode = "F"
+            await self.coordinator.api.change_mode(
+                self.modem,
+                mode
+        )
 
     @property
     def _thermostat_name(self):

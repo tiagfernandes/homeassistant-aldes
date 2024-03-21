@@ -35,6 +35,24 @@ class AldesApi:
             else:
                 raise AuthenticationException()
 
+    async def change_mode(
+        self, modem, mode
+    ):
+        """Change mode."""
+        async with await self._request_with_auth_interceptor(
+            self._session.post,
+            f"{self._API_URL_PRODUCTS}/{modem}/commands",
+            json={
+                "jsonrpc": "2.0",
+                "method": "changeMode",
+                "id": 1,
+                "params": [
+                    mode
+                ]
+            },
+        ) as response:
+            return await response.json()
+
     async def fetch_data(self):
         """Fetch data."""
         async with await self._request_with_auth_interceptor(
