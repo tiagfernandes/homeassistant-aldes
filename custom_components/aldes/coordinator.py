@@ -26,7 +26,7 @@ class AldesDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(minutes=30),
+            update_interval=timedelta(minutes=1),
         )
         self.api = api
 
