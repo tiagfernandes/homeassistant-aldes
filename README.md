@@ -2,27 +2,19 @@
 
 # Aldes integration for Home Assistant
 
-This integration allows Home Assistant to fetch and modify data from Aldes products through an AldesConnect box.
-
-**Warning:** This integration is barely usable, given AldesConnect deep connectivity issues, even with the official mobile app (see the PlayStore comments for instance). Also, the API lacks several important features which makes this integration a lesser one.
+This integration allows Home Assistant to interact with an Aldes product through the cloud. You must have an AldesConnect box connected to the device, set up and working in the mobile app.
 
 ## Supported products
 
 ### T.One® AIR
 
-#### Implemented
-
 + Binary sensor entity to check if the product is connected to Aldes cloud
-+ Temperature sensor entities for each room
-+ Climate entities for each room that allow to set the target temperature
-
-#### To do
-
-+ Air cooling mode is not implemented yet since I still need to activate the feature
++ Temperature sensor entity for each room
++ Climate entity for each room with a thermostat to set the target temperature, and a global mode switch between OFF, HEAT and COOL.
 
 ### Other products
 
-I can't develop support for other products since I don't have them. But you can always submit a PR!
++ T.One® AquaAIR: the air part could work (to be confirmed) but there's no water implementation.
 
 ## Installation
 
@@ -32,13 +24,12 @@ In HACS, add the custom repository https://github.com/guix77/homeassistant-aldes
 
 The username and password asked during the configuration are the same that you use for the Aldes mobile app.
 
-## Development
-
-This integration is based on https://github.com/custom-components/integration_blueprint
-
 ## Credits
 
-Some code was inspired from https://github.com/aalmazanarbs/hassio_aldes, thanks!
+- [API doc](https://community.jeedom.com/t/aldes-connect-api/57068)
+- [API auth & call examples](https://github.com/aalmazanarbs/hassio_aldes)
+- [More API doc](https://community.jeedom.com/t/aldes-t-one-api-php/94269)
+- [Integration blueprint](https://github.com/custom-components/integration_blueprint)
 
 ## See also
 
