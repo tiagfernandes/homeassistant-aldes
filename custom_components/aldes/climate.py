@@ -96,7 +96,7 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             if product["serial_number"] == self.product_serial_number:
                 if product["indicator"]["current_air_mode"] == "B":
                     return product["indicator"]["cmist"]
-                if product["indicator"]["current_air_mode"] == "C":
+                if product["indicator"]["current_air_mode"] == "F":
                     return product["indicator"]["fmist"]
             return None
 
@@ -107,7 +107,7 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             if product["serial_number"] == self.product_serial_number:
                 if product["indicator"]["current_air_mode"] == "B":
                     return product["indicator"]["cmast"]
-                if product["indicator"]["current_air_mode"] == "C":
+                if product["indicator"]["current_air_mode"] == "F":
                     return product["indicator"]["fmast"]
             return None
 
