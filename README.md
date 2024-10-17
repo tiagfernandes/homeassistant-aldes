@@ -1,5 +1,7 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
+October 2024: archived in favor of a local DIY solution: https://github.com/guix77/esphome-aldes-tone
+
 # Aldes integration for Home Assistant
 
 This integration allows Home Assistant to interact with an Aldes product through the cloud. You must have an AldesConnect box connected to the device, set up and working in the mobile app.
