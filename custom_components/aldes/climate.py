@@ -8,11 +8,17 @@ from homeassistant.components.climate import (
     ClimateEntityFeature,
     HVACMode,
     HVACAction,
+    PRESET_COMFORT,
+    PRESET_ECO,
+    PRESET_BOOST
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 from .const import DOMAIN, ALDESMode
 from .entity import AldesEntity
+
+TEMPERATURE_REDUCE_ECO = 2
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -58,14 +64,12 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         self._attr_temperature_unit = UnitOfTemperature.CELSIUS
         self._attr_hvac_mode = HVACMode.OFF
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
-        self._attr_supported_features = (
-            ClimateEntityFeature.TARGET_TEMPERATURE
-            | ClimateEntityFeature.TURN_OFF
-            | ClimateEntityFeature.TURN_ON
-        )
+        self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON | ClimateEntityFeature.PRESET_MODE
         self._enable_turn_on_off_backwards_compatibility = False
         self._attr_target_temperature_step = 1
         self._attr_hvac_action = HVACAction.OFF
+        self._attr_preset_mode = PRESET_COMFORT
+        self._attr_preset_modes = [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]
 
     @property
     def device_info(self):
@@ -94,8 +98,10 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         """Get the minimum temperature"""
         for product in self.coordinator.data:
             if product["serial_number"] == self.product_serial_number:
-                if product["indicator"]["current_air_mode"] in [ALDESMode.HEAT_COMFORT, ALDESMode.HEAT_ECO]:
+                if product["indicator"]["current_air_mode"] == ALDESMode.HEAT_COMFORT:
                     return product["indicator"]["cmist"]
+                elif product["indicator"]["current_air_mode"] == ALDESMode.HEAT_ECO:
+                    return product["indicator"]["cmist"] - TEMPERATURE_REDUCE_ECO
                 elif product["indicator"]["current_air_mode"] in [ALDESMode.COOL_COMFORT, ALDESMode.COOL_BOOST]:
                     return product["indicator"]["fmist"]
             return None
@@ -105,8 +111,10 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         """Get the maximum temperature"""
         for product in self.coordinator.data:
             if product["serial_number"] == self.product_serial_number:
-                if product["indicator"]["current_air_mode"] in [ALDESMode.HEAT_COMFORT, ALDESMode.HEAT_ECO]:
+                if product["indicator"]["current_air_mode"] == ALDESMode.HEAT_COMFORT:
                     return product["indicator"]["cmast"]
+                elif product["indicator"]["current_air_mode"] == ALDESMode.HEAT_ECO:
+                    return product["indicator"]["cmast"] - TEMPERATURE_REDUCE_ECO
                 elif product["indicator"]["current_air_mode"] in [ALDESMode.COOL_COMFORT, ALDESMode.COOL_BOOST]:
                     return product["indicator"]["fmast"]
             return None
@@ -141,15 +149,17 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
                             # HEATING
                             elif currentAirMode in [ALDESMode.HEAT_COMFORT, ALDESMode.HEAT_ECO]:
                                 hvacMode = HVACMode.HEAT
+                                if currentAirMode == ALDESMode.HEAT_ECO:
+                                    self._attr_target_temperature -= TEMPERATURE_REDUCE_ECO
                                 # If the temperature is below, it is HEATING, otherwise by default IDLE
-                                if  thermostat["CurrentTemperature"] < thermostat["TemperatureSet"] :
+                                if self._attr_current_temperature < self._attr_target_temperature:
                                     hvacAction = HVACAction.HEATING
 
                             # COOLING
                             elif currentAirMode in [ALDESMode.COOL_COMFORT, ALDESMode.COOL_BOOST]:
                                 hvacMode = HVACMode.COOL
                                 # If the temperature is above, it is COOLING, otherwise by default IDLE
-                                if  thermostat["CurrentTemperature"] > thermostat["TemperatureSet"] :
+                                if self._attr_current_temperature > self._attr_target_temperature :
                                     hvacAction = HVACAction.COOLING
 
                             # PROG
@@ -158,16 +168,39 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
 
                             self._attr_hvac_mode = hvacMode
                             self._attr_hvac_action = hvacAction
+
+                            """ PRESET MODE """
+                            if currentAirMode == ALDESMode.OFF:
+                                """ OFF """
+                                self._attr_hvac_mode = HVACMode.OFF
+                            elif currentAirMode == ALDESMode.HEAT_COMFORT:
+                                """HEAT COMFORT"""
+                                self._attr_preset_mode = PRESET_COMFORT
+                            elif currentAirMode == ALDESMode.HEAT_ECO:
+                                """HEAT ECO"""
+                                self._attr_preset_mode = PRESET_ECO
+                            elif currentAirMode == ALDESMode.COOL_COMFORT:
+                                """COOL COMFORT"""
+                                self._attr_preset_mode = PRESET_COMFORT
+                            elif currentAirMode == ALDESMode.COOL_BOOST:
+                                """COOL BOOST"""
+                                self._attr_preset_mode = PRESET_BOOST
             else:
                 self._attr_current_temperature = None
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
+        targetTemperature = kwargs.get(ATTR_TEMPERATURE)
+
+        # If ECO Add +2°C
+        if self._attr_preset_mode == PRESET_ECO:
+            targetTemperature += TEMPERATURE_REDUCE_ECO
+
         await self.coordinator.api.set_target_temperature(
             self.modem,
             self.thermostat_id,
             self._thermostat_name,
-            kwargs.get(ATTR_TEMPERATURE),
+            targetTemperature,
         )
         self._attr_target_temperature = kwargs.get(ATTR_TEMPERATURE)
 
@@ -184,6 +217,29 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             await self.coordinator.api.change_mode(
                 self.modem,
                 mode
+            )
+
+    async def async_set_preset_mode(self, preset_mode):
+        """Set new target preset mode."""
+        if self._attr_hvac_mode == HVACMode.HEAT:
+            if preset_mode == PRESET_ECO:
+                self._attr_hvac_action = PRESET_ECO
+                mode = ALDESMode.HEAT_ECO
+            else:
+                self._attr_hvac_action = PRESET_COMFORT
+                mode = ALDESMode.HEAT_COMFORT
+
+        elif self._attr_hvac_mode == HVACMode.COOL:
+            if preset_mode == PRESET_BOOST:
+                self._attr_hvac_action = PRESET_BOOST
+                mode = ALDESMode.COOL_BOOST
+            else:
+                self._attr_hvac_action = PRESET_COMFORT
+                mode = ALDESMode.COOL_COMFORT
+
+        await self.coordinator.api.change_mode(
+            self.modem,
+            mode
         )
 
     @property
