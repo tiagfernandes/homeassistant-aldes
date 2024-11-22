@@ -128,7 +128,6 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     @callback
     def _async_update_attrs(self) -> None:
         """Update binary sensor attributes."""
-
         for product in self.coordinator.data:
             if product["isConnected"]:
                 if product["serial_number"] == self.product_serial_number:
@@ -208,15 +207,16 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         """Set new HVAC mode."""
         if hvac_mode in [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]:
             if hvac_mode == HVACMode.OFF:
-                mode = ALDESMode.OFF
+                mode = ALDESMode.OFF.value
             elif hvac_mode == HVACMode.HEAT:
-                mode = ALDESMode.HEAT_COMFORT
+                mode = ALDESMode.HEAT_COMFORT.value
             elif hvac_mode == HVACMode.COOL:
-                mode = ALDESMode.COOL_COMFORT
+                mode = ALDESMode.COOL_COMFORT.value
 
             await self.coordinator.api.change_mode(
                 self.modem,
-                mode
+                mode,
+                0
             )
 
     async def async_set_preset_mode(self, preset_mode):
@@ -224,22 +224,23 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         if self._attr_hvac_mode == HVACMode.HEAT:
             if preset_mode == PRESET_ECO:
                 self._attr_hvac_action = PRESET_ECO
-                mode = ALDESMode.HEAT_ECO
+                mode = ALDESMode.HEAT_ECO.value
             else:
                 self._attr_hvac_action = PRESET_COMFORT
-                mode = ALDESMode.HEAT_COMFORT
+                mode = ALDESMode.HEAT_COMFORT.value
 
         elif self._attr_hvac_mode == HVACMode.COOL:
             if preset_mode == PRESET_BOOST:
                 self._attr_hvac_action = PRESET_BOOST
-                mode = ALDESMode.COOL_BOOST
+                mode = ALDESMode.COOL_BOOST.value
             else:
                 self._attr_hvac_action = PRESET_COMFORT
-                mode = ALDESMode.COOL_COMFORT
+                mode = ALDESMode.COOL_COMFORT.value
 
         await self.coordinator.api.change_mode(
             self.modem,
-            mode
+            mode,
+            0
         )
 
     @property
