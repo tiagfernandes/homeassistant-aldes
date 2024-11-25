@@ -37,7 +37,7 @@ class AldesApi:
                 raise AuthenticationException()
 
     async def change_mode(
-        self, modem, mode: ALDESMode
+        self, modem, mode, isForHotWater: bool
     ):
         """Change mode."""
         async with await self._request_with_auth_interceptor(
@@ -46,13 +46,15 @@ class AldesApi:
             json={
                 "jsonrpc": "2.0",
                 "method": "changeMode",
-                "id": 1,
+                "id": 2 if isForHotWater else 1,
                 "params": [
-                    mode.value
+                    mode
                 ]
             },
         ) as response:
-            return await response.json()
+            res = await response.json()
+            print(f'Change mode : {res}')
+            return res
 
     async def fetch_data(self):
         """Fetch data."""
