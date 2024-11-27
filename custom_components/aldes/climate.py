@@ -1,22 +1,33 @@
 """Support for the Aldes sensors."""
+
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from typing import TYPE_CHECKING
+
 from homeassistant.components.climate import (
     ClimateEntity,
-    ClimateEntityFeature,
-    HVACMode,
-    HVACAction,
+)
+from homeassistant.components.climate.const import (
+    PRESET_BOOST,
     PRESET_COMFORT,
     PRESET_ECO,
-    PRESET_BOOST,
+    ClimateEntityFeature,
+    HVACAction,
+    HVACMode,
 )
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
-from .const import DOMAIN, ALDESMode
-from .entity import AldesEntity
+from homeassistant.components.sensor.const import SensorDeviceClass
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
+
+from .const import DOMAIN, AirMode
+from .entity import AldesEntity, ThermostatApiEntity
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
 
 TEMPERATURE_REDUCE_ECO = 2
 
@@ -31,13 +42,9 @@ async def async_setup_entry(
         AldesClimateEntity(
             coordinator,
             entry,
-            product["serial_number"],
-            product["reference"],
-            product["modem"],
-            thermostat["ThermostatId"],
+            thermostat,
         )
-        for product in coordinator.data
-        for thermostat in product["indicator"]["thermostats"]
+        for thermostat in coordinator.data.indicator.thermostats
     ]
 
     async_add_entities(sensors)
@@ -46,20 +53,21 @@ async def async_setup_entry(
 class AldesClimateEntity(AldesEntity, ClimateEntity):
     """Define an Aldes climate entity."""
 
+    coordinator: AldesDataUpdateCoordinator
+
     def __init__(
         self,
-        coordinator,
-        config_entry,
-        product_serial_number,
-        reference,
-        modem,
-        thermostat_id,
+        coordinator: AldesDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        thermostat: ThermostatApiEntity,
     ) -> None:
+        """Innitialize."""
         super().__init__(
-            coordinator, config_entry, product_serial_number, reference, modem
+            coordinator,
+            config_entry,
         )
-        self.thermostat_id = thermostat_id
-        self._attr_device_class = "temperature"
+        self.thermostat = thermostat
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_temperature_unit = UnitOfTemperature.CELSIUS
         self._attr_hvac_mode = HVACMode.OFF
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
@@ -77,18 +85,17 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        return DeviceInfo(identifiers={(DOMAIN, self.thermostat_id)})
+        return DeviceInfo(identifiers={(DOMAIN, str(self.thermostat.id))})
 
     @property
     def unique_id(self) -> str:
         """Return a unique ID for this entity."""
-        return f"{DOMAIN}_{self.thermostat_id}_climate"
+        return f"{DOMAIN}_{self.thermostat.id}_climate"
 
     @property
-    def name(self) -> str | None:
+    def name(self) -> str:
         """Return the name of this entity."""
-        thermostat = self._get_thermostat()
-        return f"{thermostat['Name']} climate" if thermostat else None
+        return f"{self.thermostat.name} climate"
 
     @property
     def min_temp(self) -> float | None:
@@ -102,33 +109,14 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
 
     def _get_temperature(self, temp_type: str) -> float | None:
         """Calculate the min or max temperature."""
-        product = self._get_product()
-        if not product:
-            return None
-
-        mode = product["indicator"]["current_air_mode"]
+        mode = self.coordinator.data.indicator.current_air_mode
         temp_key = "cmist" if temp_type == "min" else "cmast"
 
-        if mode in [ALDESMode.COOL_COMFORT, ALDESMode.COOL_BOOST]:
+        if mode in [AirMode.COOL_COMFORT, AirMode.COOL_BOOST]:
             temp_key = "fmist" if temp_type == "min" else "fmast"
 
-        temp = product["indicator"].get(temp_key)
-        return temp - TEMPERATURE_REDUCE_ECO if mode == ALDESMode.HEAT_ECO else temp
-
-    def _get_product(self) -> dict | None:
-        """Retrieve the product for this thermostat."""
-        return next(
-            (p for p in self.coordinator.data if p["serial_number"] == self.product_serial_number), None
-        )
-
-    def _get_thermostat(self) -> dict | None:
-        """Retrieve thermostat data."""
-        product = self._get_product()
-        if product:
-            return next(
-                (t for t in product["indicator"]["thermostats"] if t["ThermostatId"] == self.thermostat_id), None
-            )
-        return None
+        temp = self.coordinator.data.indicator.__getattribute__(temp_key)
+        return temp - TEMPERATURE_REDUCE_ECO if mode == AirMode.HEAT_ECO else temp
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -139,44 +127,51 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     @callback
     def _async_update_attrs(self) -> None:
         """Update attributes based on coordinator data."""
-        thermostat = self._get_thermostat()
-        product = self._get_product()
+        thermostat = self.thermostat
 
-        if not thermostat or not product.get("isConnected"):
+        if not thermostat or not self.coordinator.data.is_connected:
             self._attr_current_temperature = None
             return
 
-        self._attr_target_temperature = thermostat["TemperatureSet"]
-        self._attr_current_temperature = thermostat["CurrentTemperature"]
+        self._attr_target_temperature = thermostat.temperature_set
+        self._attr_current_temperature = thermostat.current_temperature
 
-        air_mode = product["indicator"]["current_air_mode"]
+        air_mode = self.coordinator.data.indicator.current_air_mode
         self._attr_hvac_mode = self._determine_hvac_mode(air_mode)
         self._attr_hvac_action = self._determine_hvac_action(air_mode)
 
-        if air_mode in [ALDESMode.HEAT_ECO, ALDESMode.COOL_BOOST]:
-            self._attr_preset_mode = PRESET_BOOST if air_mode == ALDESMode.COOL_BOOST else PRESET_ECO
+        if air_mode in [AirMode.HEAT_ECO, AirMode.COOL_BOOST]:
+            self._attr_preset_mode = (
+                PRESET_BOOST if air_mode == AirMode.COOL_BOOST else PRESET_ECO
+            )
         else:
             self._attr_preset_mode = PRESET_COMFORT
 
-    def _determine_hvac_mode(self, air_mode: ALDESMode) -> HVACMode:
+    def _determine_hvac_mode(self, air_mode: AirMode) -> HVACMode:
         """Determine HVAC mode from air mode."""
         return {
-            ALDESMode.OFF: HVACMode.OFF,
-            ALDESMode.HEAT_COMFORT: HVACMode.HEAT,
-            ALDESMode.HEAT_ECO: HVACMode.HEAT,
-            ALDESMode.COOL_COMFORT: HVACMode.COOL,
-            ALDESMode.COOL_BOOST: HVACMode.COOL,
+            AirMode.OFF: HVACMode.OFF,
+            AirMode.HEAT_COMFORT: HVACMode.HEAT,
+            AirMode.HEAT_ECO: HVACMode.HEAT,
+            AirMode.COOL_COMFORT: HVACMode.COOL,
+            AirMode.COOL_BOOST: HVACMode.COOL,
         }.get(air_mode, HVACMode.AUTO)
 
-    def _determine_hvac_action(self, air_mode: ALDESMode) -> HVACAction:
+    def _determine_hvac_action(self, air_mode: AirMode) -> HVACAction:
         """Determine HVAC action."""
-        if air_mode in [ALDESMode.HEAT_COMFORT, ALDESMode.HEAT_ECO]:
+        if air_mode in [AirMode.HEAT_COMFORT, AirMode.HEAT_ECO] and (
+            self._attr_current_temperature is not None
+            and self._attr_target_temperature is not None
+        ):
             return (
                 HVACAction.HEATING
                 if self._attr_current_temperature < self._attr_target_temperature
                 else HVACAction.IDLE
             )
-        elif air_mode in [ALDESMode.COOL_COMFORT, ALDESMode.COOL_BOOST]:
+        if air_mode in [AirMode.COOL_COMFORT, AirMode.COOL_BOOST] and (
+            self._attr_current_temperature is not None
+            and self._attr_target_temperature is not None
+        ):
             return (
                 HVACAction.COOLING
                 if self._attr_current_temperature > self._attr_target_temperature
@@ -187,36 +182,58 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
         target_temperature = kwargs.get(ATTR_TEMPERATURE)
-        if self._attr_preset_mode == PRESET_ECO:
+        if self._attr_preset_mode == PRESET_ECO and target_temperature is not None:
             target_temperature += TEMPERATURE_REDUCE_ECO
 
         await self.coordinator.api.set_target_temperature(
-            self.modem, self.thermostat_id, self._thermostat_name, target_temperature
+            self.modem, self.thermostat.id, self.thermostat.name, target_temperature
         )
         self._attr_target_temperature = kwargs.get(ATTR_TEMPERATURE)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
         modes_map = {
-            HVACMode.OFF: ALDESMode.OFF,
-            HVACMode.HEAT: ALDESMode.HEAT_COMFORT,
-            HVACMode.COOL: ALDESMode.COOL_COMFORT,
+            HVACMode.OFF: AirMode.OFF,
+            HVACMode.HEAT: AirMode.HEAT_COMFORT,
+            HVACMode.COOL: AirMode.COOL_COMFORT,
         }
         mode = modes_map.get(hvac_mode)
         if mode:
-            await self.coordinator.api.change_mode(self.modem, mode.value, 0)
+            await self.coordinator.api.change_mode(
+                self.modem, mode.value, is_for_hot_water=False
+            )
+            self._attr_hvac_mode = hvac_mode
+            self.coordinator.skip_next_update = True
+            self.async_write_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
         mode_map = {
-            PRESET_ECO: ALDESMode.HEAT_ECO if self._attr_hvac_mode == HVACMode.HEAT else None,
-            PRESET_BOOST: ALDESMode.COOL_BOOST if self._attr_hvac_mode == HVACMode.COOL else None,
+            PRESET_ECO: AirMode.HEAT_ECO
+            if self._attr_hvac_mode == HVACMode.HEAT
+            else None,
+            PRESET_BOOST: AirMode.COOL_BOOST
+            if self._attr_hvac_mode == HVACMode.COOL
+            else None,
             PRESET_COMFORT: (
-                ALDESMode.HEAT_COMFORT
+                AirMode.HEAT_COMFORT
                 if self._attr_hvac_mode == HVACMode.HEAT
-                else ALDESMode.COOL_COMFORT
+                else AirMode.COOL_COMFORT
             ),
         }
         mode = mode_map.get(preset_mode)
         if mode:
-            await self.coordinator.api.change_mode(self.modem, mode.value, 0)
+            await self.coordinator.api.change_mode(
+                self.modem, mode.value, is_for_hot_water=False
+            )
+            self._attr_preset_mode = preset_mode
+            self.coordinator.skip_next_update = True
+            self.async_write_ha_state()
+
+    async def async_turn_on(self) -> None:
+        """Turn on the climate device."""
+        await self.async_set_hvac_mode(HVACMode.HEAT)
+
+    async def async_turn_off(self) -> None:
+        """Turn off the climate device."""
+        await self.async_set_hvac_mode(HVACMode.OFF)

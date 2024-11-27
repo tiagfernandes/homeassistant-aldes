@@ -2,8 +2,9 @@
 Custom integration to integrate Aldes with Home Assistant.
 
 For more details about this integration, please refer to
-https://github.com/guix77/homeassistant-aldes
+https://github.com/tiagfernandes/homeassistant-aldes
 """
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import aiohttp_client
@@ -13,7 +14,7 @@ from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN, PLATFORMS
 from .coordinator import AldesDataUpdateCoordinator
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Aldes from a config entry."""
     api = AldesApi(
         entry.data[CONF_USERNAME],

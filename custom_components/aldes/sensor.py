@@ -1,16 +1,23 @@
 """Support for the Aldes sensors."""
+
 from __future__ import annotations
-from typing import Any, Optional
 
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature, PERCENTAGE
+from typing import TYPE_CHECKING, Any
+
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.components.sensor.const import SensorDeviceClass
+from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 
-from .const import DOMAIN, MANUFACTURER, FRIENDLY_NAMES
-from .entity import AldesEntity
+from .const import DOMAIN, FRIENDLY_NAMES, MANUFACTURER
+from .entity import AldesEntity, ThermostatApiEntity
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
 
 
 async def async_setup_entry(
@@ -21,45 +28,34 @@ async def async_setup_entry(
 
     sensors = []
 
-    for product in coordinator.data:
-        # Check connection status and ensure required keys exist
-        if not product.get("isConnected") or "indicator" not in product:
-            continue
-
-        # Collect thermostat sensors
-        for thermostat in product["indicator"].get("thermostats", []):
-            sensors.append(
-                AldesThermostatSensorEntity(
-                    coordinator,
-                    entry,
-                    product["serial_number"],
-                    product["reference"],
-                    product["modem"],
-                    thermostat.get("ThermostatId"),
-                    thermostat.get("Name"),
-                )
+    # Collect thermostat sensors
+    sensors.extend(
+        [
+            AldesThermostatSensorEntity(
+                coordinator,
+                entry,
+                thermostat,
             )
+            for thermostat in coordinator.data.indicator.thermostats
+        ]
+    )
 
-        # Collect Main Room Temperature sensor
-        sensors.append(AldesMainRoomTemperatureEntity(
+    # Collect Main Room Temperature sensor
+    sensors.append(
+        AldesMainRoomTemperatureEntity(
             coordinator,
             entry,
-            product["serial_number"],
-            product["reference"],
-            product["modem"]
-        ))
+        )
+    )
 
-        # Collect water entities if AquaAir reference
-        if product["reference"] == "TONE_AQUA_AIR":
-            sensors.append(
-                AldesWaterEntity(
-                    coordinator,
-                    entry,
-                    product["serial_number"],
-                    product["reference"],
-                    product["modem"]
-                )
+    # Collect water entities if AquaAir reference
+    if coordinator.data.reference == "TONE_AQUA_AIR":
+        sensors.append(
+            AldesWaterEntity(
+                coordinator,
+                entry,
             )
+        )
 
     async_add_entities(sensors)
 
@@ -67,9 +63,24 @@ async def async_setup_entry(
 class BaseAldesSensorEntity(AldesEntity, SensorEntity):
     """Base class for Aldes sensors with common attributes and methods."""
 
-    def __init__(self, coordinator, config_entry, product_serial_number, reference, modem):
-        super().__init__(coordinator, config_entry, product_serial_number, reference, modem)
-        self._state: Optional[Any] = None
+    def __init__(
+        self,
+        coordinator: AldesDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, config_entry)
+        self._state: Any | None = None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.serial_number)},
+            manufacturer=MANUFACTURER,
+            name=f"{FRIENDLY_NAMES[self.reference]} {self.serial_number}",
+            model=FRIENDLY_NAMES[self.reference],
+        )
 
     @property
     def native_value(self) -> Any:
@@ -86,19 +97,30 @@ class BaseAldesSensorEntity(AldesEntity, SensorEntity):
 class AldesThermostatSensorEntity(BaseAldesSensorEntity):
     """Define an Aldes thermostat sensor."""
 
-    def __init__(self, coordinator, config_entry, product_serial_number, reference, modem, thermostat_id, thermostat_name):
-        super().__init__(coordinator, config_entry, product_serial_number, reference, modem)
-        self.thermostat_id = thermostat_id
-        self.thermostat_name = thermostat_name
-        self._attr_device_class = "temperature"
+    thermostat: ThermostatApiEntity
+
+    def __init__(
+        self,
+        coordinator: AldesDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        thermostat: ThermostatApiEntity,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, config_entry)
+        self.thermostat = thermostat
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        name = f"Thermostat {self.thermostat_name}" if self.thermostat_name else f"Thermostat {self.thermostat_id}"
+        name = (
+            f"Thermostat {self.thermostat.name}"
+            if self.thermostat.name
+            else f"Thermostat {self.thermostat.id}"
+        )
         return DeviceInfo(
-            identifiers={(DOMAIN, self.thermostat_id)},
+            identifiers={(DOMAIN, str(self.thermostat.id))},
             manufacturer=MANUFACTURER,
             name=name,
         )
@@ -106,12 +128,12 @@ class AldesThermostatSensorEntity(BaseAldesSensorEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID for this entity."""
-        return f"{DOMAIN}_{self.product_serial_number}_{self.thermostat_id}_temperature"
+        return f"{DOMAIN}_{self.serial_number}_{self.thermostat.id}_temperature"
 
     @property
     def name(self) -> str:
         """Return a name for this entity."""
-        return self.thermostat_name or f"Thermostat {self.thermostat_id} Temperature"
+        return self.thermostat.name or f"Thermostat {self.thermostat.id} Temperature"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -119,38 +141,31 @@ class AldesThermostatSensorEntity(BaseAldesSensorEntity):
         thermostat = next(
             (
                 t
-                for product in self.coordinator.data
-                if product["serial_number"] == self.product_serial_number
-                for t in product["indicator"].get("thermostats", [])
-                if t["ThermostatId"] == self.thermostat_id
+                for t in self.coordinator.data.indicator.thermostats
+                if t.id == self.thermostat.id
             ),
             None,
         )
-        self._update_state(thermostat.get("CurrentTemperature") if thermostat else None)
+        self._update_state(thermostat.current_temperature if thermostat else None)
         super()._handle_coordinator_update()
 
 
 class AldesWaterEntity(BaseAldesSensorEntity):
     """Define an Aldes Water Quantity sensor."""
 
-    def __init__(self, coordinator, config_entry, product_serial_number, reference, modem):
-        super().__init__(coordinator, config_entry, product_serial_number, reference, modem)
+    def __init__(
+        self,
+        coordinator: AldesDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, config_entry)
         self._attr_native_unit_of_measurement = PERCENTAGE
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return the device info."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.product_serial_number)},
-            manufacturer=MANUFACTURER,
-            name=f"{FRIENDLY_NAMES[self.reference]} {self.product_serial_number}",
-            model=FRIENDLY_NAMES[self.reference],
-        )
 
     @property
     def unique_id(self) -> str:
         """Return a unique ID for this entity."""
-        return f"{DOMAIN}_{self.product_serial_number}_water_quantity"
+        return f"{DOMAIN}_{self.serial_number}_water_quantity"
 
     @property
     def name(self) -> str:
@@ -160,57 +175,48 @@ class AldesWaterEntity(BaseAldesSensorEntity):
     @property
     def icon(self) -> str:
         """Return an icon based on water level."""
-        if self._state is None or not isinstance(self._state, (int, float)):
+        low_threshold = 25
+        medium_threshold = 50
+        high_threshold = 75
+
+        if self._state is None or not isinstance(self._state, int | float):
             return "mdi:water-boiler"
-        if self._state <= 25:
+        if self._state <= low_threshold:
             return "mdi:gauge-empty"
-        elif self._state <= 50:
+        if self._state <= medium_threshold:
             return "mdi:gauge-low"
-        elif self._state <= 75:
+        if self._state <= high_threshold:
             return "mdi:gauge"
         return "mdi:gauge-full"
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-        product = next(
-            (
-                p
-                for p in self.coordinator.data
-                if p["serial_number"] == self.product_serial_number and p["isConnected"]
-            ),
-            None,
+        self._update_state(
+            self.coordinator.data.indicator.hot_water_quantity
+            if self.coordinator.data.is_connected
+            else None
         )
-        self._update_state(product["indicator"].get("qte_eau_chaude") if product else None)
         super()._handle_coordinator_update()
 
 
 class AldesMainRoomTemperatureEntity(BaseAldesSensorEntity):
     """Define an Aldes Main Room Temperature sensor."""
 
-    def __init__(self, coordinator, config_entry, product_serial_number, reference, modem):
-        super().__init__(coordinator, config_entry, product_serial_number, reference, modem)
-        self._attr_device_class = "temperature"
+    def __init__(
+        self,
+        coordinator: AldesDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, config_entry)
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return the device info."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.product_serial_number)},
-            manufacturer=MANUFACTURER,
-            name=f"{FRIENDLY_NAMES[self.reference]} {self.product_serial_number}",
-            model=FRIENDLY_NAMES[self.reference],
-        )
-
-    @property
     def unique_id(self) -> str:
-        """Return a unique ID for this entity."""
-
-    @property
-    def unique_id(self):
         """Return a unique ID to use for this entity."""
-        return f"{DOMAIN}_{self.product_serial_number}_main_room_temperature"
+        return f"{DOMAIN}_{self.serial_number}_main_room_temperature"
 
     @property
     def name(self) -> str:
@@ -220,13 +226,9 @@ class AldesMainRoomTemperatureEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-        product = next(
-            (
-                p
-                for p in self.coordinator.data
-                if p["serial_number"] == self.product_serial_number and p["isConnected"]
-            ),
-            None,
+        self._update_state(
+            self.coordinator.data.indicator.main_temperature
+            if self.coordinator.data.is_connected
+            else None
         )
-        self._update_state(product["indicator"].get("tmp_principal") if product else None)
         super()._handle_coordinator_update()

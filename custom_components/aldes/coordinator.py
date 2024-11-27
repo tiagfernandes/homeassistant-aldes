@@ -1,16 +1,22 @@
-"""Aldes"""
+"""Aldes."""
+
 from __future__ import annotations
 
-from datetime import timedelta
 import logging
-from typing import Any
-import async_timeout
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
+import async_timeout
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import AldesApi
 from .const import DOMAIN
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from custom_components.aldes.entity import DataApiEntity
+
+    from .api import AldesApi
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,8 +25,10 @@ class AldesDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Aldes data coordinator."""
 
     _API_TIMEOUT = 10
+    skip_next_update: bool = False
+    data: DataApiEntity
 
-    def __init__(self, hass: HomeAssistant, api: AldesApi):
+    def __init__(self, hass: HomeAssistant, api: AldesApi) -> None:
         """Initialize."""
         super().__init__(
             hass,
@@ -30,8 +38,11 @@ class AldesDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.api = api
 
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self) -> DataApiEntity | None:
         """Update data via library."""
+        if self.skip_next_update:
+            self.skip_next_update = False
+            return
         try:
             async with async_timeout.timeout(self._API_TIMEOUT):
                 return await self.api.fetch_data()
