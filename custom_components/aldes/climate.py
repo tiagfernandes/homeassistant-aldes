@@ -109,6 +109,9 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
 
     def _get_temperature(self, temp_type: str) -> float | None:
         """Calculate the min or max temperature."""
+        if self.coordinator.data is None:
+            return None
+
         mode = self.coordinator.data.indicator.current_air_mode
         temp_key = "cmist" if temp_type == "min" else "cmast"
 
@@ -133,7 +136,11 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             self._attr_current_temperature = None
             return
 
-        self._attr_target_temperature = thermostat.temperature_set
+        self._attr_target_temperature = (
+            thermostat.temperature_set - TEMPERATURE_REDUCE_ECO
+            if self._attr_preset_mode == PRESET_ECO
+            else thermostat.temperature_set
+        )
         self._attr_current_temperature = thermostat.current_temperature
 
         air_mode = self.coordinator.data.indicator.current_air_mode

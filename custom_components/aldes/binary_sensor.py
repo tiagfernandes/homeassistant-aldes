@@ -66,7 +66,11 @@ class AldesBinarySensorEntity(AldesEntity, BinarySensorEntity):
     @callback
     def _async_update_attrs(self) -> None:
         """Update binary sensor attributes."""
-        if self.serial_number and self.coordinator.data.is_connected:
+        if (
+            self.serial_number
+            and self.coordinator.data is not None
+            and self.coordinator.data.is_connected
+        ):
             self._attr_is_on = True
         else:
             self._attr_is_on = False

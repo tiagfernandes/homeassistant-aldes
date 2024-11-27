@@ -1,6 +1,6 @@
 {
-  "domain": "aldes_tone",
-  "name": "Aldes T.One",
+  "domain": "aldes",
+  "name": "Aldes",
   "version": "v3.0.0",
   "integration_type": "hub",
   "documentation": "https://github.com/tiagfernandes/homeassistant-aldes",
