@@ -1,24 +1,25 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-# Aldes integration for Home Assistant
+# Aldes T.One integration for Home Assistant
 
 This integration allows Home Assistant to interact with an Aldes product through the cloud. You must have an AldesConnect box connected to the device, set up and working in the mobile app.
 
 ## Supported products
 
-### T.One® AIR
+| **Fonctionality**                                                                                                        | **T.One® AIR** | **T.One® AquaAIR** |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------- | ------------------ |
+| **Air Mode** (Off, Heat Comfort, Heat Eco, Heat Prog A, Heat Prog B, Cool Comfort, Cool Boost, Cool Prog A, Cool Prog B) | ✔️              | ✔️                  |
+| **Water Mode** (Off, On, Boost)                                                                                          | ❌              | ✔️                  |
+| **Connectivity**                                                                                                         | ✔️              | ✔️                  |
+| **Main Room Tempeature**                                                                                                 | ✔️              | ✔️                  |
+| **Water Tank Quantity** (0%, 25%, 50%, 75%, 100%)                                                                        | ❌              | ✔️                  |
+| **Temperature sensor for each room**                                                                                     | ✔️              | ✔️                  |
+| **Climate entity for each room**                                                                                         | ✔️              | ✔️                  |
 
-+ Binary sensor entity to check if the product is connected to Aldes cloud
-+ Temperature sensor entity for each room
-+ Climate entity for each room with a thermostat to set the target temperature, and a global mode switch between OFF, HEAT and COOL.
-
-### Other products
-
-+ T.One® AquaAIR: the air part could work (to be confirmed) but there's no water implementation.
 
 ## Installation
 
-In HACS, add the custom repository https://github.com/guix77/homeassistant-aldes and select the Integration category.
+In HACS, add the custom repository https://github.com/tiagfernandes/homeassistant-aldes and select the Integration category.
 
 ## Configuration
 
