@@ -1,9 +1,12 @@
 """Adds config flow for Aldes."""
+
+from typing import Any
+
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
-import voluptuous as vol
 
-from .api import AldesApi
+from .api import AldesApi, AuthenticationExceptionError
 from .const import (
     CONF_PASSWORD,
     CONF_USERNAME,
@@ -17,11 +20,11 @@ class AldesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize."""
         self._errors = {}
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> Any:
         """Handle a flow initialized by the user."""
         self._errors = {}
 
@@ -46,26 +49,26 @@ class AldesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         return await self._show_config_form(user_input)
 
-    async def _show_config_form(self, user_input):  # pylint: disable=unused-argument
+    async def _show_config_form(self, user_input: dict[str, str]) -> Any:
         """Show the configuration form to edit location data."""
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_USERNAME, default=user_input[CONF_USERNAME]): str,
-                    vol.Required(CONF_PASSWORD, default=user_input[CONF_PASSWORD]): str,
+                    vol.Required(CONF_USERNAME, default=user_input[CONF_USERNAME]): str,  # type: ignore  # noqa: PGH003
+                    vol.Required(CONF_PASSWORD, default=user_input[CONF_PASSWORD]): str,  # type: ignore  # noqa: PGH003
                 }
             ),
             errors=self._errors,
         )
 
-    async def _test_credentials(self, username, password):
+    async def _test_credentials(self, username: str, password: str) -> bool:
         """Return true if credentials is valid."""
         try:
             session = async_create_clientsession(self.hass)
             api = AldesApi(username, password, session)
             await api.authenticate()
+        except AuthenticationExceptionError:
+            return False
+        else:
             return True
-        except Exception:  # pylint: disable=broad-except
-            pass
-        return False

@@ -3,7 +3,7 @@
         "step": {
             "user": {
                 "title": "Aldes",
-                "description": "If you need help with the configuration have a look here: https://github.com/guix77/homeassistant-aldes",
+                "description": "If you need help with the configuration have a look here: https://github.com/tiagfernandes/homeassistant-aldes",
                 "data": {
                     "username": "Username",
                     "password": "Password"
