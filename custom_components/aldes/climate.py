@@ -8,9 +8,6 @@ from homeassistant.components.climate import (
     ClimateEntity,
 )
 from homeassistant.components.climate.const import (
-    PRESET_BOOST,
-    PRESET_COMFORT,
-    PRESET_ECO,
     ClimateEntityFeature,
     HVACAction,
     HVACMode,
@@ -75,12 +72,9 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             ClimateEntityFeature.TARGET_TEMPERATURE
             | ClimateEntityFeature.TURN_OFF
             | ClimateEntityFeature.TURN_ON
-            | ClimateEntityFeature.PRESET_MODE
         )
         self._attr_target_temperature_step = 1
         self._attr_hvac_action = HVACAction.OFF
-        self._attr_preset_mode = PRESET_COMFORT
-        self._attr_preset_modes = [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -136,23 +130,12 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             self._attr_current_temperature = None
             return
 
-        self._attr_target_temperature = (
-            thermostat.temperature_set - TEMPERATURE_REDUCE_ECO
-            if self._attr_preset_mode == PRESET_ECO
-            else thermostat.temperature_set
-        )
+        self._attr_target_temperature = thermostat.temperature_set
         self._attr_current_temperature = thermostat.current_temperature
 
         air_mode = self.coordinator.data.indicator.current_air_mode
         self._attr_hvac_mode = self._determine_hvac_mode(air_mode)
         self._attr_hvac_action = self._determine_hvac_action(air_mode)
-
-        if air_mode in [AirMode.HEAT_ECO, AirMode.COOL_BOOST]:
-            self._attr_preset_mode = (
-                PRESET_BOOST if air_mode == AirMode.COOL_BOOST else PRESET_ECO
-            )
-        else:
-            self._attr_preset_mode = PRESET_COMFORT
 
     def _determine_hvac_mode(self, air_mode: AirMode) -> HVACMode:
         """Determine HVAC mode from air mode."""
@@ -160,8 +143,12 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             AirMode.OFF: HVACMode.OFF,
             AirMode.HEAT_COMFORT: HVACMode.HEAT,
             AirMode.HEAT_ECO: HVACMode.HEAT,
+            AirMode.HEAT_PROG_A: HVACMode.HEAT,
+            AirMode.HEAT_PROG_B: HVACMode.HEAT,
             AirMode.COOL_COMFORT: HVACMode.COOL,
             AirMode.COOL_BOOST: HVACMode.COOL,
+            AirMode.COOL_PROG_A: HVACMode.COOL,
+            AirMode.COOL_PROG_B: HVACMode.COOL,
         }.get(air_mode, HVACMode.AUTO)
 
     def _determine_hvac_action(self, air_mode: AirMode) -> HVACAction:
@@ -189,8 +176,6 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
         target_temperature = kwargs.get(ATTR_TEMPERATURE)
-        if self._attr_preset_mode == PRESET_ECO and target_temperature is not None:
-            target_temperature += TEMPERATURE_REDUCE_ECO
 
         await self.coordinator.api.set_target_temperature(
             self.modem, self.thermostat.id, self.thermostat.name, target_temperature
@@ -210,30 +195,6 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
                 self.modem, mode.value, is_for_hot_water=False
             )
             self._attr_hvac_mode = hvac_mode
-            self.coordinator.skip_next_update = True
-            self.async_write_ha_state()
-
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
-        """Set new preset mode."""
-        mode_map = {
-            PRESET_ECO: AirMode.HEAT_ECO
-            if self._attr_hvac_mode == HVACMode.HEAT
-            else None,
-            PRESET_BOOST: AirMode.COOL_BOOST
-            if self._attr_hvac_mode == HVACMode.COOL
-            else None,
-            PRESET_COMFORT: (
-                AirMode.HEAT_COMFORT
-                if self._attr_hvac_mode == HVACMode.HEAT
-                else AirMode.COOL_COMFORT
-            ),
-        }
-        mode = mode_map.get(preset_mode)
-        if mode:
-            await self.coordinator.api.change_mode(
-                self.modem, mode.value, is_for_hot_water=False
-            )
-            self._attr_preset_mode = preset_mode
             self.coordinator.skip_next_update = True
             self.async_write_ha_state()
 
