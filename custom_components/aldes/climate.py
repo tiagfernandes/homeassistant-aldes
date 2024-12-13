@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -172,7 +172,7 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             )
         return HVACAction.OFF
 
-    async def async_set_temperature(self, **kwargs) -> None:
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         target_temperature = kwargs.get(ATTR_TEMPERATURE)
 
