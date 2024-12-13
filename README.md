@@ -1,37 +1,40 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-# Aldes integration for Home Assistant
+# Integration Aldes T.One via AldesConnect pour Home Assistant
 
-This integration allows Home Assistant to interact with an Aldes product through the cloud. You must have an AldesConnect box connected to the device, set up and working in the mobile app.
+Cette intégration permet d'intégrer le produit Aldes T.One à Home Assistant via le cloud. Vous devez disposer de la box AldesConnect, connectée à l'appareil, configurée et fonctionnelle dans l'application mobile AldesConnect.
 
-## Supported products
+## Fonctionnalités prises en charge
 
-| **Fonctionality**                                                                                                        | **T.One® AIR** | **T.One® AquaAIR** |
-| ------------------------------------------------------------------------------------------------------------------------ | -------------- | ------------------ |
-| **Air Mode** (Off, Heat Comfort, Heat Eco, Heat Prog A, Heat Prog B, Cool Comfort, Cool Boost, Cool Prog A, Cool Prog B) | ✔️              | ✔️                  |
-| **Water Mode** (Off, On, Boost)                                                                                          | ❌              | ✔️                  |
-| **Connectivity**                                                                                                         | ✔️              | ✔️                  |
-| **Main Room Tempeature**                                                                                                 | ✔️              | ✔️                  |
-| **Water Tank Quantity** (0%, 25%, 50%, 75%, 100%)                                                                        | ❌              | ✔️                  |
-| **Temperature sensor for each room**                                                                                     | ✔️              | ✔️                  |
-| **Climate entity for each room**                                                                                         | ✔️              | ✔️                  |
+| **Fonctionnalité**                                                                                                                                                                                                             | **T.One® AIR** | **T.One® AquaAIR** |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------: | :----------------: |
+| **Mode Air** <br>- Éteind<br>- Chauffage Comfort<br>- Chauffage Eco<br>- Chauffage Prog A<br>- Chauffage Prog B<br>- Rafraîchissement Comfort<br>- Rafraîchissement Boost<br>- Rafraîchissement A<br>- Rafraîchissement Prog B |       ✔️        |         ✔️          |
+| **Mode Eau chaude** <br>- Éteind<br>- Allumé<br> - Boost                                                                                                                                                                       |       ❌        |         ✔️          |
+| **Connectivité**                                                                                                                                                                                                               |       ✔️        |         ✔️          |
+| **Température de la pièce principale**                                                                                                                                                                                         |       ✔️        |         ✔️          |
+| **Quantité d'eau chaude disponible**                                                                                                                                                                                           |       ❌        |         ✔️          |
+| **Capteur de température pour chaque pièce**                                                                                                                                                                                   |       ✔️        |         ✔️          |
+| **Entité thermostat pour chaque pièce**                                                                                                                                                                                        |       ✔️        |         ✔️          |
+
+
 
 
 ## Installation
 
-In HACS, add the custom repository https://github.com/tiagfernandes/homeassistant-aldes and select the Integration category.
+Dans HACS, ajoutez le dépôt personnalisé https://github.com/tiagfernandes/homeassistant-aldes et sélectionnez la catégorie Intégration.
 
 ## Configuration
 
-The username and password asked during the configuration are the same that you use for the Aldes mobile app.
+Le nom d'utilisateur et le mot de passe demandés lors de la configuration sont les mêmes que ceux que vous utilisez pour l'application mobile Aldes Connect.
 
-## Credits
+## Crédits
 
+- [Base du projet](https://github.com/guix77/homeassistant-aldes)
 - [API doc](https://community.jeedom.com/t/aldes-connect-api/57068)
 - [API auth & call examples](https://github.com/aalmazanarbs/hassio_aldes)
 - [More API doc](https://community.jeedom.com/t/aldes-t-one-api-php/94269)
 - [Integration blueprint](https://github.com/custom-components/integration_blueprint)
 
 ## See also
-
+- https://github.com/guix77/esphome-aldes-tone Connection du produit T.One avec ESPHome
 - https://github.com/Fredzxda/homeassistant-aldes for EASYHOME PureAir Compact CONNECT
