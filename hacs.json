@@ -1,0 +1,12 @@
+{
+    "name": "Aldes T.One Air/AquaAir",
+    "hacs": "1.34.0",
+    "domains": [
+        "binary_sensor",
+        "climate",
+        "sensor"
+    ],
+    "hide_default_branch": true,
+    "homeassistant": "2024.6.0",
+    "render_readme": true
+}
