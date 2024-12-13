@@ -114,26 +114,24 @@ class AldesThermostatSensorEntity(BaseAldesSensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        name = (
-            f"Thermostat {self.thermostat.name}"
-            if self.thermostat.name
-            else f"Thermostat {self.thermostat.id}"
-        )
         return DeviceInfo(
             identifiers={(DOMAIN, str(self.thermostat.id))},
             manufacturer=MANUFACTURER,
-            name=name,
+            name=(
+                f"Thermostat {self.thermostat.name}"
+                if self.thermostat.name
+                else f"Thermostat {self.thermostat.id}"
+            ),
         )
 
     @property
-    def unique_id(self) -> str:
-        """Return a unique ID for this entity."""
-        return f"{DOMAIN}_{self.serial_number}_{self.thermostat.id}_temperature"
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.thermostat.id}_{self.thermostat.name}_temperature"
 
-    @property
-    def name(self) -> str:
-        """Return a name for this entity."""
-        return self.thermostat.name or f"Thermostat {self.thermostat.id} Temperature"
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return f"Température {self.thermostat.name}"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -163,14 +161,13 @@ class AldesWaterEntity(BaseAldesSensorEntity):
         self._attr_native_unit_of_measurement = PERCENTAGE
 
     @property
-    def unique_id(self) -> str:
-        """Return a unique ID for this entity."""
-        return f"{DOMAIN}_{self.serial_number}_water_quantity"
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_hot_water_quantity"
 
-    @property
-    def name(self) -> str:
-        """Return a name for this entity."""
-        return "Water Quantity"
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Quantité d'eau chaude"
 
     @property
     def icon(self) -> str:
@@ -214,14 +211,13 @@ class AldesMainRoomTemperatureEntity(BaseAldesSensorEntity):
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     @property
-    def unique_id(self) -> str:
+    def unique_id(self) -> str | None:
         """Return a unique ID to use for this entity."""
-        return f"{DOMAIN}_{self.serial_number}_main_room_temperature"
+        return f"{self.serial_number}_main_room_temperature"
 
-    @property
-    def name(self) -> str:
-        """Return a name for this entity."""
-        return "Main Room Temperature"
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Température de la pièce principale"
 
     @callback
     def _handle_coordinator_update(self) -> None:

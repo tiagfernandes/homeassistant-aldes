@@ -9,7 +9,7 @@ DOMAIN = "aldes"
 VERSION = "0.0.1"
 
 CONF_USERNAME = "username"
-CONF_PASSWORD = "password"
+CONF_PASSWORD = "password"  # noqa: S105
 
 MANUFACTURER = "Aldes"
 PLATFORMS: list[Platform] = [

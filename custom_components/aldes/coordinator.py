@@ -42,7 +42,7 @@ class AldesDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Update data via library."""
         if self.skip_next_update:
             self.skip_next_update = False
-            return
+            return None
         try:
             async with async_timeout.timeout(self._API_TIMEOUT):
                 return await self.api.fetch_data()

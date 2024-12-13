@@ -48,14 +48,13 @@ class AldesBinarySensorEntity(AldesEntity, BinarySensorEntity):
         )
 
     @property
-    def unique_id(self) -> str:
+    def unique_id(self) -> str | None:
         """Return a unique ID to use for this entity."""
-        return f"{DOMAIN}_{self.serial_number}_connectivity"
+        return f"{self.serial_number}_connectivity"
 
-    @property
-    def name(self) -> str:
-        """Return a name to use for this entity."""
-        return "Connectivity"
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Connectivité"
 
     @callback
     def _handle_coordinator_update(self) -> None:

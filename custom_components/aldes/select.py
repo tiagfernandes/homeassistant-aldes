@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -72,14 +72,14 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
         ]
         self._attr_display_names: dict[AirMode, str] = {
             AirMode.OFF: "Off",
-            AirMode.HEAT_COMFORT: "Heat Comfort",
-            AirMode.HEAT_ECO: "Heat Eco",
-            AirMode.HEAT_PROG_A: "Heat Prog A",
-            AirMode.HEAT_PROG_B: "Heat Prog B",
-            AirMode.COOL_COMFORT: "Cool Comfort",
-            AirMode.COOL_BOOST: "Cool Boost",
-            AirMode.COOL_PROG_A: "Cool Prog A",
-            AirMode.COOL_PROG_B: "Cool Prog B",
+            AirMode.HEAT_COMFORT: "Chauffage Comfort",
+            AirMode.HEAT_ECO: "Chauffage Eco",
+            AirMode.HEAT_PROG_A: "Chauffage Prog A",
+            AirMode.HEAT_PROG_B: "Chauffage Prog B",
+            AirMode.COOL_COMFORT: "Rafraîchissement Comfort",
+            AirMode.COOL_BOOST: "Rafraîchissement Boost",
+            AirMode.COOL_PROG_A: "Rafraîchissement Prog A",
+            AirMode.COOL_PROG_B: "Rafraîchissement Prog B",
         }
 
     @property
@@ -93,14 +93,13 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
         )
 
     @property
-    def unique_id(self) -> str:
+    def unique_id(self) -> str | None:
         """Return a unique ID to use for this entity."""
-        return f"{DOMAIN}_{self.serial_number}_air_mode"
+        return f"{self.serial_number}_air_mode"
 
-    @property
-    def name(self) -> str:
-        """Return a name to use for this entity."""
-        return "Air mode"
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Mode Air"
 
     @property
     def options(self) -> list[str]:
@@ -109,7 +108,7 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
         return [self._attr_display_names[AirMode(mode)] for mode in self._attr_options]
 
     @property
-    def current_option(self) -> Any:
+    def current_option(self) -> str | None:
         """Retourner l'option actuelle à partir du mode interne."""
         # Si l'option actuelle est définie, la convertir en son nom lisible
         if self._attr_current_option:
@@ -189,23 +188,22 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
         )
 
     @property
-    def unique_id(self) -> str:
+    def unique_id(self) -> str | None:
         """Return a unique ID to use for this entity."""
-        return f"{DOMAIN}_{self.serial_number}_water_mode"
+        return f"{self.serial_number}_hot_water_mode"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Mode Eau chaude"
 
     @property
-    def name(self) -> str:
-        """Return a name to use for this entity."""
-        return "Water mode"
-
-    @property
-    def options(self) -> Any:
+    def options(self) -> list[str]:
         """Retourner la liste des options disponibles."""
         # Convertir les options internes en noms affichés
         return [self._attr_display_names[mode] for mode in self._attr_options]
 
     @property
-    def current_option(self) -> Any:
+    def current_option(self) -> str | None:
         """Retourner l'option actuelle à partir du mode interne."""
         # Si l'option actuelle est définie, la convertir en son nom lisible
         if self._attr_current_option:

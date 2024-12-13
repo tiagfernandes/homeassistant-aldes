@@ -77,17 +77,19 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        return DeviceInfo(identifiers={(DOMAIN, str(self.thermostat.id))})
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self.thermostat.id))},
+            name=f"Thermostat {self.thermostat.id!s} {self.thermostat.name}",
+        )
 
     @property
-    def unique_id(self) -> str:
-        """Return a unique ID for this entity."""
-        return f"{DOMAIN}_{self.thermostat.id}_climate"
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.thermostat.id}_{self.thermostat.name}_climate"
 
-    @property
-    def name(self) -> str:
-        """Return the name of this entity."""
-        return f"{self.thermostat.name} climate"
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return f"Thermostat {self.thermostat.name}"
 
     @property
     def min_temp(self) -> float | None:
