@@ -1,5 +1,6 @@
 """Sample API Client."""
 
+import asyncio
 from typing import Any
 
 import aiohttp
@@ -26,6 +27,9 @@ class AldesApi:
         self._password = password
         self._session = session
         self._token = ""
+        self.queue_target_temperature = asyncio.Queue()
+
+        asyncio.create_task(self.worker())
 
     async def authenticate(self) -> None:
         """Get an access token."""
@@ -68,14 +72,42 @@ class AldesApi:
 
             return None
 
+    async def worker(self) -> None:
+        """Traite les tâches dans la file avec un délai entre chaque tâche."""
+        while True:
+            (
+                modem,
+                thermostat_id,
+                thermostat_name,
+                temperature,
+            ) = await self.queue_target_temperature.get()
+            if modem and thermostat_id and thermostat_name and temperature:
+                await self.change_temperature(
+                    modem, thermostat_id, thermostat_name, temperature
+                )
+                await asyncio.sleep(5)
+                self.queue_target_temperature.task_done()
+
     async def set_target_temperature(
         self,
         modem: str,
         thermostat_id: int,
         thermostat_name: str,
         target_temperature: Any,
-    ) -> Any:
+    ) -> None:
         """Set target temperature."""
+        await self.queue_target_temperature.put(
+            (modem, thermostat_id, thermostat_name, target_temperature)
+        )
+
+    async def change_temperature(
+        self,
+        modem: str,
+        thermostat_id: int,
+        thermostat_name: str,
+        target_temperature: Any,
+    ) -> Any:
+        """Change temperature of thermostat."""
         async with await self._request_with_auth_interceptor(
             self._session.patch,
             f"{self._API_URL_PRODUCTS}/{modem}/updateThermostats",
@@ -111,6 +143,18 @@ class AldesApi:
     def _build_authorization(self) -> str:
         """Build authorization."""
         return f"{self._TOKEN_TYPE} {self._token}"
+
+    async def process_queue(self) -> None:
+        """Process requests in the queue with a delay."""
+        while True:
+            (
+                func,
+                args,
+                kwargs,
+            ) = await self.queue_target_temperature.get()
+            await func(*args, **kwargs)
+            await asyncio.sleep(5)
+            self.queue_target_temperature.task_done()
 
 
 class AuthenticationExceptionError(Exception):
