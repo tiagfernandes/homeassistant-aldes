@@ -1,13 +1,13 @@
 {
   "domain": "aldes",
   "name": "Aldes",
-  "version": "v3.0.0",
-  "integration_type": "hub",
-  "documentation": "https://github.com/tiagfernandes/homeassistant-aldes",
-  "issue_tracker": "https://github.com/tiagfernandes/homeassistant-aldes/issues",
   "codeowners": [
     "@tiagfernandes"
   ],
   "config_flow": true,
-  "iot_class": "cloud_polling"
+  "documentation": "https://github.com/tiagfernandes/homeassistant-aldes",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/tiagfernandes/homeassistant-aldes/issues",
+  "version": "v3.0.0"
 }

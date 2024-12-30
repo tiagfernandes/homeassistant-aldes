@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -77,17 +77,19 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        return DeviceInfo(identifiers={(DOMAIN, str(self.thermostat.id))})
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self.thermostat.id))},
+            name=f"Thermostat {self.thermostat.id!s} {self.thermostat.name}",
+        )
 
     @property
-    def unique_id(self) -> str:
-        """Return a unique ID for this entity."""
-        return f"{DOMAIN}_{self.thermostat.id}_climate"
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.thermostat.id}_{self.thermostat.name}_climate"
 
-    @property
-    def name(self) -> str:
-        """Return the name of this entity."""
-        return f"{self.thermostat.name} climate"
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return f"Thermostat {self.thermostat.name}"
 
     @property
     def min_temp(self) -> float | None:
@@ -121,7 +123,8 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     @callback
     def _async_update_attrs(self) -> None:
         """Update attributes based on coordinator data."""
-        thermostat = self.thermostat
+        thermostat = self._get_thermostat_by_id(self.thermostat.id)
+        self.thermostat = self.thermostat
 
         if not thermostat or not self.coordinator.data.is_connected:
             self._attr_current_temperature = None
@@ -133,6 +136,17 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         air_mode = self.coordinator.data.indicator.current_air_mode
         self._attr_hvac_mode = self._determine_hvac_mode(air_mode)
         self._attr_hvac_action = self._determine_hvac_action(air_mode)
+
+    def _get_thermostat_by_id(self, target_id: int) -> ThermostatApiEntity | None:
+        """Return thermostat object by id."""
+        return next(
+            (
+                thermostat
+                for thermostat in self.coordinator.data.indicator.thermostats
+                if thermostat.id == target_id
+            ),
+            None,
+        )
 
     def _determine_hvac_mode(self, air_mode: AirMode) -> HVACMode:
         """Determine HVAC mode from air mode."""
@@ -170,7 +184,7 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             )
         return HVACAction.OFF
 
-    async def async_set_temperature(self, **kwargs) -> None:
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         target_temperature = kwargs.get(ATTR_TEMPERATURE)
 
