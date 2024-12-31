@@ -15,10 +15,11 @@ Cette intégration permet d'ajouter le produit Aldes T.One à Home Assistant via
 | **Quantité d'eau chaude disponible**                                                                                                                                                                                           |       ❌        |         ✔️          |
 | **Capteur de température pour chaque pièce**                                                                                                                                                                                   |       ✔️        |         ✔️          |
 | **Entité thermostat pour chaque pièce**                                                                                                                                                                                        |       ✔️        |         ✔️          |
+| **Composition du foyer**                                                                                                                                                                                        |       ❌        |         ✔️          |
 
 ## Installation
 
-Dans HACS, ajoutez le dépôt personnalisé https://github.com/tiagfernandes/homeassistant-aldes et sélectionnez la catégorie Intégration.
+Dans HACS, ajoutez le dépôt personnalisé <https://github.com/tiagfernandes/homeassistant-aldes> et sélectionnez la catégorie Intégration.
 
 ## Configuration
 
@@ -33,5 +34,6 @@ Le nom d'utilisateur et le mot de passe demandés lors de la configuration sont 
 - [Blueprint d'intégration](https://github.com/custom-components/integration_blueprint)
 
 ## Voir aussi
-- https://github.com/guix77/esphome-aldes-tone : Connexion du produit T.One avec ESPHome
-- https://github.com/Fredzxda/homeassistant-aldes : EASYHOME PureAir Compact CONNECT
+
+- <https://github.com/guix77/esphome-aldes-tone> : Connexion du produit T.One avec ESPHome
+- <https://github.com/Fredzxda/homeassistant-aldes> : EASYHOME PureAir Compact CONNECT

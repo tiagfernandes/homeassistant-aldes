@@ -156,6 +156,20 @@ class AldesApi:
             await asyncio.sleep(5)
             self.queue_target_temperature.task_done()
 
+    async def change_people(self, modem: str, people: str) -> Any:
+        """Change people."""
+        async with await self._request_with_auth_interceptor(
+            self._session.post,
+            f"{self._API_URL_PRODUCTS}/{modem}/commands",
+            json={
+                "jsonrpc": "2.0",
+                "method": "changePeople",
+                "id": 0,
+                "params": [people],
+            },
+        ) as response:
+            return await response.json()
+
 
 class AuthenticationExceptionError(Exception):
     """Exception."""

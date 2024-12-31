@@ -5,8 +5,18 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from custom_components.aldes.const import AirMode, WaterMode
+from custom_components.aldes.const import AirMode, HouseholdComposition, WaterMode
 from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
+
+
+class SettingsApiEntity:
+    """Settings Api Entity."""
+
+    people: HouseholdComposition | None
+
+    def __init__(self, data: dict[str, Any] | None) -> None:
+        """Initialize."""
+        self.people = data["people"] if data else None
 
 
 class IndicatorApiEntity:
@@ -29,6 +39,8 @@ class IndicatorApiEntity:
     # Current water mode, default L = OFF
     current_water_mode: WaterMode = WaterMode.OFF
 
+    settings: SettingsApiEntity
+
     def __init__(self, data: dict[str, Any] | None) -> None:
         """Initialize."""
         self.fmist = data["fmist"] if data else 0
@@ -39,6 +51,7 @@ class IndicatorApiEntity:
         self.main_temperature: float = data["tmp_principal"] if data else 0
         self.current_air_mode = data["current_air_mode"] if data else AirMode.OFF
         self.current_water_mode = data["current_water_mode"] if data else WaterMode.OFF
+        self.settings = SettingsApiEntity(data["settings"] if data else None)
 
         if data:
             # Thermostats
