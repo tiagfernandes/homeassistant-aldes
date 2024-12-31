@@ -42,3 +42,13 @@ class WaterMode(StrEnum):
     OFF = "L"
     ON = "M"
     BOOST = "N"
+
+
+class HouseholdComposition(StrEnum):
+    """Household composition for Hot water."""
+
+    TWO = "0"
+    THREE = "1"
+    FOUR = "2"
+    FIVE = "3"
+    FIVE_AND_MORE = "4"
