@@ -52,3 +52,16 @@ class HouseholdComposition(StrEnum):
     FOUR = "2"
     FIVE = "3"
     FIVE_AND_MORE = "4"
+
+
+class AntilegionellaCycle(StrEnum):
+    """Household composition for Hot water."""
+
+    OFF = "0"
+    MONDAY = "1"
+    TUESDAY = "2"
+    WEDNESDAY = "3"
+    THURSDAY = "4"
+    FRIDAY = "5"
+    SATURDAY = "6"
+    SUNDAY = "7"
