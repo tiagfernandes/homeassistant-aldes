@@ -16,6 +16,7 @@ Cette intégration permet d'ajouter le produit Aldes T.One à Home Assistant via
 | **Capteur de température pour chaque pièce**                                                                                                                                                                                   |       ✔️        |         ✔️          |
 | **Entité thermostat pour chaque pièce**                                                                                                                                                                                        |       ✔️        |         ✔️          |
 | **Composition du foyer**                                                                                                                                                                                        |       ❌        |         ✔️          |
+| **Cycle Antilegionelle**                                                                                                                                                                                        |       ❌        |         ✔️          |
 
 ## Installation
 
