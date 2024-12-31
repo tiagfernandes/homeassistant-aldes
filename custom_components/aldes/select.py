@@ -41,7 +41,7 @@ async def async_setup_entry(
         )
     )
 
-    # Collect hot water tank entities if AquaAir reference
+    # Collect entities if AquaAir reference
     if coordinator.data.reference == "TONE_AQUA_AIR":
         # Collect current water mode entity
         selects.append(
@@ -51,6 +51,7 @@ async def async_setup_entry(
             )
         )
 
+        # Collect current household composition entity
         selects.append(
             AldesHouseholdCompositionEntity(
                 coordinator,
