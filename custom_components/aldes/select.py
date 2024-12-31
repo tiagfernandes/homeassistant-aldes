@@ -12,6 +12,7 @@ from .const import (
     FRIENDLY_NAMES,
     MANUFACTURER,
     AirMode,
+    AntilegionellaCycle,
     HouseholdComposition,
     WaterMode,
 )
@@ -54,6 +55,14 @@ async def async_setup_entry(
         # Collect current household composition entity
         selects.append(
             AldesHouseholdCompositionEntity(
+                coordinator,
+                entry,
+            )
+        )
+
+        # Collect current antilegionella cycle entity
+        selects.append(
+            AldesAntilegionellaCycleEntity(
                 coordinator,
                 entry,
             )
@@ -367,3 +376,112 @@ class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
     async def _set_household_composition(self, people: str) -> None:
         """Send a command to change the value."""
         await self.coordinator.api.change_people(self.modem, people)
+
+
+class AldesAntilegionellaCycleEntity(AldesEntity, SelectEntity):
+    """Representation of the current antilegionella cycle sensor."""
+
+    def __init__(
+        self,
+        coordinator: AldesDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        """Innitialize."""
+        super().__init__(coordinator, config_entry)
+        self._state = None
+        self._attr_current_option: AntilegionellaCycle | None = None
+        self._attr_options: list[AntilegionellaCycle] = [
+            AntilegionellaCycle.OFF,
+            AntilegionellaCycle.MONDAY,
+            AntilegionellaCycle.TUESDAY,
+            AntilegionellaCycle.WEDNESDAY,
+            AntilegionellaCycle.THURSDAY,
+            AntilegionellaCycle.FRIDAY,
+            AntilegionellaCycle.SATURDAY,
+            AntilegionellaCycle.SUNDAY,
+        ]
+        self._attr_display_names: dict[AntilegionellaCycle, str] = {
+            AntilegionellaCycle.OFF: "Off",
+            AntilegionellaCycle.MONDAY: "Lundi",
+            AntilegionellaCycle.TUESDAY: "Mardi",
+            AntilegionellaCycle.WEDNESDAY: "Mercredi",
+            AntilegionellaCycle.THURSDAY: "Jeudi",
+            AntilegionellaCycle.FRIDAY: "Vendredi",
+            AntilegionellaCycle.SATURDAY: "Samedi",
+            AntilegionellaCycle.SUNDAY: "Dimanche",
+        }
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.serial_number)},
+            manufacturer=MANUFACTURER,
+            name=f"{FRIENDLY_NAMES[self.reference]} {self.serial_number}",
+            model=FRIENDLY_NAMES[self.reference],
+        )
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_antilegionella_cycle"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Cycle antilegionelle"
+
+    @property
+    def options(self) -> list[str]:
+        """Retourner la liste des options disponibles."""
+        # Convertir les options internes en noms affichés
+        return [self._attr_display_names[mode] for mode in self._attr_options]
+
+    @property
+    def current_option(self) -> str | None:
+        """Retourner l'option actuelle."""
+        # Si l'option actuelle est définie, la convertir en son nom lisible
+        if self._attr_current_option:
+            return self._attr_display_names.get(
+                self._attr_current_option, self._attr_current_option
+            )
+        return None
+
+    @property
+    def state(self) -> str:
+        """Return the current state of antilegionella cycle."""
+        # Access the `antilegio` from the coordinator data
+        antilegio = AntilegionellaCycle(
+            str(self.coordinator.data.indicator.settings.antilegio)
+        )
+        return self._attr_display_names.get(antilegio, str(antilegio))
+
+    @property
+    def available(self) -> bool:
+        """Return True if the entity is available."""
+        return self.coordinator.data.is_connected
+
+    @property
+    def icon(self) -> str:
+        """Return the icon."""
+        return "mdi:water-sync"
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the value to the selected option."""
+        # Convert the displayed option back to its original form
+        selected_option = next(
+            (key for key, value in self._attr_display_names.items() if value == option),
+            None,
+        )
+
+        await self._set_antilegionella_cycle(
+            selected_option.value
+            if isinstance(selected_option, AntilegionellaCycle)
+            else "Unknow"
+        )
+
+        self._attr_current_option = selected_option
+        self.async_write_ha_state()
+
+    async def _set_antilegionella_cycle(self, antilegio: str) -> None:
+        """Send a command to change the value."""
+        await self.coordinator.api.change_antilegio(self.modem, antilegio)

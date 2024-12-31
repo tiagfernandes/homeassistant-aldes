@@ -48,17 +48,9 @@ class AldesApi:
 
     async def change_mode(self, modem: str, mode: str, is_for_hot_water: bool) -> Any:
         """Change mode."""
-        async with await self._request_with_auth_interceptor(
-            self._session.post,
-            f"{self._API_URL_PRODUCTS}/{modem}/commands",
-            json={
-                "jsonrpc": "2.0",
-                "method": "changeMode",
-                "id": 2 if is_for_hot_water else 1,
-                "params": [mode],
-            },
-        ) as response:
-            return await response.json()
+        return await self._send_command(
+            modem, "changeMode", 2 if is_for_hot_water else 1, mode
+        )
 
     async def fetch_data(self) -> Any:
         """Fetch data."""
@@ -158,14 +150,22 @@ class AldesApi:
 
     async def change_people(self, modem: str, people: str) -> Any:
         """Change people."""
+        return await self._send_command(modem, "changePeople", 0, people)
+
+    async def change_antilegio(self, modem: str, antilegio: str) -> Any:
+        """Change antilegio."""
+        return await self._send_command(modem, "antilegio", 0, antilegio)
+
+    async def _send_command(self, modem: str, method: str, uid: int, param: str) -> Any:
+        """Send command."""
         async with await self._request_with_auth_interceptor(
             self._session.post,
             f"{self._API_URL_PRODUCTS}/{modem}/commands",
             json={
                 "jsonrpc": "2.0",
-                "method": "changePeople",
-                "id": 0,
-                "params": [people],
+                "method": method,
+                "id": uid,
+                "params": [param],
             },
         ) as response:
             return await response.json()

@@ -13,10 +13,12 @@ class SettingsApiEntity:
     """Settings Api Entity."""
 
     people: HouseholdComposition | None
+    antilegio: int | None
 
     def __init__(self, data: dict[str, Any] | None) -> None:
         """Initialize."""
         self.people = data["people"] if data else None
+        self.antilegio = data["antilegio"] if data else None
 
 
 class IndicatorApiEntity:
