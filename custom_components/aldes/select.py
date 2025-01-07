@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import (
+    EntityCategory,
+)
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import (
@@ -278,6 +281,9 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
 class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
     """Representation of the current household composition sensor."""
 
+    _state = None
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(
         self,
         coordinator: AldesDataUpdateCoordinator,
@@ -285,7 +291,6 @@ class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
     ) -> None:
         """Innitialize."""
         super().__init__(coordinator, config_entry)
-        self._state = None
         self._attr_current_option: HouseholdComposition | None = None
         self._attr_options: list[HouseholdComposition] = [
             HouseholdComposition.TWO,
@@ -381,6 +386,9 @@ class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
 class AldesAntilegionellaCycleEntity(AldesEntity, SelectEntity):
     """Representation of the current antilegionella cycle sensor."""
 
+    _state = None
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(
         self,
         coordinator: AldesDataUpdateCoordinator,
@@ -388,7 +396,6 @@ class AldesAntilegionellaCycleEntity(AldesEntity, SelectEntity):
     ) -> None:
         """Innitialize."""
         super().__init__(coordinator, config_entry)
-        self._state = None
         self._attr_current_option: AntilegionellaCycle | None = None
         self._attr_options: list[AntilegionellaCycle] = [
             AntilegionellaCycle.OFF,
