@@ -189,11 +189,9 @@ class AldesWaterEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-        self._update_state(
-            self.coordinator.data.indicator.hot_water_quantity
-            if self.coordinator.data.is_connected
-            else None
-        )
+        quantity = min(100, max(self.coordinator.data.indicator.hot_water_quantity, 0))
+
+        self._update_state(quantity if self.coordinator.data.is_connected else None)
         super()._handle_coordinator_update()
 
 
