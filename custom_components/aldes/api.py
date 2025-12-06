@@ -1,14 +1,26 @@
-"""Sample API Client."""
+"""Aldes API client."""
 
 import asyncio
+import logging
+from enum import IntEnum
 from typing import Any
 
 import aiohttp
 
 from custom_components.aldes.entity import DataApiEntity
 
+_LOGGER = logging.getLogger(__name__)
+
 HTTP_OK = 200
 HTTP_UNAUTHORIZED = 401
+REQUEST_DELAY = 5  # Delay between queued requests in seconds
+
+
+class CommandUid(IntEnum):
+    """Command UIDs for API requests."""
+
+    AIR_MODE = 1
+    HOT_WATER = 2
 
 
 class AldesApi:
@@ -22,18 +34,21 @@ class AldesApi:
     def __init__(
         self, username: str, password: str, session: aiohttp.ClientSession
     ) -> None:
-        """Sample API Client."""
+        """Initialize Aldes API client."""
         self._username = username
         self._password = password
         self._session = session
         self._token = ""
-        self.queue_target_temperature = asyncio.Queue()
+        self.queue_target_temperature: asyncio.Queue[tuple[str, int, str, Any]] = (
+            asyncio.Queue()
+        )
 
-        asyncio.create_task(self.worker())
+        asyncio.create_task(self._temperature_worker())
 
     async def authenticate(self) -> None:
-        """Get an access token."""
-        data: dict = {
+        """Authenticate and retrieve access token from Aldes API."""
+        _LOGGER.info("Authenticating with Aldes API...")
+        data: dict[str, str] = {
             "grant_type": "password",
             "username": self._username,
             "password": self._password,
@@ -43,29 +58,36 @@ class AldesApi:
             json = await response.json()
             if response.status == HTTP_OK:
                 self._token = json["access_token"]
+                _LOGGER.info("Successfully authenticated with Aldes API")
             else:
-                raise AuthenticationExceptionError
+                error_msg = f"Authentication failed with status {response.status}"
+                _LOGGER.error(error_msg)
+                raise AuthenticationError(error_msg)
 
-    async def change_mode(self, modem: str, mode: str, is_for_hot_water: bool) -> Any:
-        """Change mode."""
-        return await self._send_command(
-            modem, "changeMode", 2 if is_for_hot_water else 1, mode
-        )
+    async def change_mode(self, modem: str, mode: str, uid: CommandUid) -> Any:
+        """Change mode (air or hot water)."""
+        mode_type = "air" if uid == CommandUid.AIR_MODE else "hot water"
+        _LOGGER.info("Changing %s mode to: %s", mode_type, mode)
+        return await self._send_command(modem, "changeMode", uid, mode)
 
     async def fetch_data(self) -> Any:
         """Fetch data."""
+        _LOGGER.debug("Fetching data from Aldes API...")
         async with await self._request_with_auth_interceptor(
             self._session.get, self._API_URL_PRODUCTS
         ) as response:
             data = await response.json()
+            _LOGGER.debug("Fetched data: %s", data)
 
             if isinstance(data, list) and len(data) > 0:
+                _LOGGER.debug("Successfully retrieved Aldes device data")
                 return DataApiEntity(data[0])
 
+            _LOGGER.warning("No data received from Aldes API")
             return None
 
-    async def worker(self) -> None:
-        """Traite les tâches dans la file avec un délai entre chaque tâche."""
+    async def _temperature_worker(self) -> None:
+        """Process temperature change requests from queue with delay between each."""
         while True:
             (
                 modem,
@@ -77,8 +99,8 @@ class AldesApi:
                 await self.change_temperature(
                     modem, thermostat_id, thermostat_name, temperature
                 )
-                await asyncio.sleep(5)
-                self.queue_target_temperature.task_done()
+                await asyncio.sleep(REQUEST_DELAY)
+            self.queue_target_temperature.task_done()
 
     async def set_target_temperature(
         self,
@@ -100,6 +122,12 @@ class AldesApi:
         target_temperature: Any,
     ) -> Any:
         """Change temperature of thermostat."""
+        _LOGGER.info(
+            "Changing temperature for thermostat %s (%s) to %s°C",
+            thermostat_id,
+            thermostat_name,
+            target_temperature,
+        )
         async with await self._request_with_auth_interceptor(
             self._session.patch,
             f"{self._API_URL_PRODUCTS}/{modem}/updateThermostats",
@@ -111,12 +139,14 @@ class AldesApi:
                 }
             ],
         ) as response:
-            return await response.json()
+            result = await response.json()
+            _LOGGER.debug("Temperature change response: %s", result)
+            return result
 
     async def _request_with_auth_interceptor(
         self, request: Any, url: str, **kwargs: Any
-    ) -> Any:
-        """Provide authentication to request."""
+    ) -> aiohttp.ClientResponse:
+        """Execute request with automatic re-authentication if needed."""
         initial_response = await request(
             url,
             headers={self._AUTHORIZATION_HEADER_KEY: self._build_authorization()},
@@ -125,7 +155,7 @@ class AldesApi:
         if initial_response.status == HTTP_UNAUTHORIZED:
             initial_response.close()
             await self.authenticate()
-            return request(
+            return await request(
                 url,
                 headers={self._AUTHORIZATION_HEADER_KEY: self._build_authorization()},
                 **kwargs,
@@ -133,31 +163,28 @@ class AldesApi:
         return initial_response
 
     def _build_authorization(self) -> str:
-        """Build authorization."""
+        """Build Authorization header value."""
         return f"{self._TOKEN_TYPE} {self._token}"
 
-    async def process_queue(self) -> None:
-        """Process requests in the queue with a delay."""
-        while True:
-            (
-                func,
-                args,
-                kwargs,
-            ) = await self.queue_target_temperature.get()
-            await func(*args, **kwargs)
-            await asyncio.sleep(5)
-            self.queue_target_temperature.task_done()
-
     async def change_people(self, modem: str, people: str) -> Any:
-        """Change people."""
+        """Change household composition setting."""
+        _LOGGER.info("Changing household composition to: %s", people)
         return await self._send_command(modem, "changePeople", 0, people)
 
     async def change_antilegio(self, modem: str, antilegio: str) -> Any:
-        """Change antilegio."""
+        """Change antilegio cycle setting."""
+        _LOGGER.info("Changing antilegionella cycle to: %s", antilegio)
         return await self._send_command(modem, "antilegio", 0, antilegio)
 
     async def _send_command(self, modem: str, method: str, uid: int, param: str) -> Any:
-        """Send command."""
+        """Send JSON-RPC command to device."""
+        _LOGGER.debug(
+            "Sending command to modem %s - method: %s, id: %s, param: %s",
+            modem,
+            method,
+            uid,
+            param,
+        )
         async with await self._request_with_auth_interceptor(
             self._session.post,
             f"{self._API_URL_PRODUCTS}/{modem}/commands",
@@ -168,8 +195,10 @@ class AldesApi:
                 "params": [param],
             },
         ) as response:
-            return await response.json()
+            result = await response.json()
+            _LOGGER.debug("Command response: %s", result)
+            return result
 
 
-class AuthenticationExceptionError(Exception):
-    """Exception."""
+class AuthenticationError(Exception):
+    """Authentication failed exception."""

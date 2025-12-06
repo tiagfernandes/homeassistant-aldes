@@ -21,6 +21,9 @@ PLATFORMS: list[Platform] = [
 
 FRIENDLY_NAMES = {"TONE_AIR": "T.One® AIR", "TONE_AQUA_AIR": "T.One® AquaAIR"}
 
+# ECO mode temperature offset (displayed to user as -2°C, sent to API as +2°C)
+ECO_MODE_TEMPERATURE_OFFSET = 2
+
 
 class AirMode(StrEnum):
     """Aldes Air Mode."""

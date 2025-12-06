@@ -19,6 +19,7 @@ from .const import (
     HouseholdComposition,
     WaterMode,
 )
+from .api import CommandUid
 from .entity import AldesEntity
 
 if TYPE_CHECKING:
@@ -178,7 +179,7 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
 
     async def _set_air_mode(self, mode: str) -> None:
         """Send a command to change the air mode."""
-        await self.coordinator.api.change_mode(self.modem, mode, is_for_hot_water=False)
+        await self.coordinator.api.change_mode(self.modem, mode, CommandUid.AIR_MODE)
 
 
 class AldesWaterModeEntity(AldesEntity, SelectEntity):
@@ -275,7 +276,7 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
 
     async def _set_water_mode(self, mode: str) -> None:
         """Send a command to change the water mode."""
-        await self.coordinator.api.change_mode(self.modem, mode, is_for_hot_water=True)
+        await self.coordinator.api.change_mode(self.modem, mode, CommandUid.HOT_WATER)
 
 
 class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):

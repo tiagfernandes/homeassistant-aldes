@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 
     from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
 
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -136,6 +140,11 @@ class AldesThermostatSensorEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
+
+        if not self.coordinator.data:
+            _LOGGER.debug("Coordinator data is None, skipping update")
+            return
+
         thermostat = next(
             (
                 t
@@ -144,6 +153,7 @@ class AldesThermostatSensorEntity(BaseAldesSensorEntity):
             ),
             None,
         )
+
         self._update_state(thermostat.current_temperature if thermostat else None)
         super()._handle_coordinator_update()
 

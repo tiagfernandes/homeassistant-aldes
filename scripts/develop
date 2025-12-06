@@ -4,10 +4,13 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# Use Python 3.13 from virtual environment
+PYTHON="${PWD}/.venv/bin/python"
+
 # Create config dir if not present
 if [[ ! -d "${PWD}/config" ]]; then
     mkdir -p "${PWD}/config"
-    hass --config "${PWD}/config" --script ensure_config
+    $PYTHON -m homeassistant --config "${PWD}/config" --script ensure_config
 fi
 
 # Set the path to custom_components
@@ -17,4 +20,4 @@ fi
 export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
 
 # Start Home Assistant
-hass --config "${PWD}/config" --debug
+$PYTHON -m homeassistant --config "${PWD}/config" --debug
