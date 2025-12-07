@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
+from custom_components.aldes.api import CommandUid
+from custom_components.aldes.const import (
+    AirMode,
+    DOMAIN,
+    ECO_MODE_TEMPERATURE_OFFSET,
+)
+from custom_components.aldes.entity import AldesEntity, ThermostatApiEntity
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
     ClimateEntityFeature,
@@ -15,15 +23,19 @@ from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from .const import AirMode, DOMAIN, ECO_MODE_TEMPERATURE_OFFSET
-from .entity import AldesEntity, ThermostatApiEntity
-
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
     from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
 
-from custom_components.aldes.api import CommandUid
+_LOGGER = logging.getLogger(__name__)
+
+# Program character mappings
+PROGRAM_OFF = "0"
+PROGRAM_COMFORT = "B"
+PROGRAM_ECO = "C"
+PROGRAM_BOOST = "G"
 
 
 async def async_setup_entry(
@@ -72,6 +84,8 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         )
         self._attr_target_temperature_step = 1
         self._attr_hvac_action = HVACAction.OFF
+        # Store effective mode for use in temperature calculations
+        self._effective_air_mode: AirMode | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -90,6 +104,152 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         """Return the friendly name."""
         return f"Thermostat {self.thermostat.name}"
 
+    def _get_current_time_slot(self) -> str:
+        """Get the current time slot character (0-9, A-N for hours 0-23, plus half-hour indicator)."""
+        from homeassistant.util import dt
+
+        now = dt.now()
+        # Hours: 0-9 = '0'-'9', 10-23 = 'A'-'N'
+        hour = now.hour
+        if hour < 10:
+            hour_char = str(hour)
+        else:
+            # 10=A, 11=B, ..., 23=N
+            hour_char = chr(ord("A") + (hour - 10))
+
+        # For now, return just the hour character
+        # If half-hours need different encoding, adjust here
+        return hour_char
+
+    def _get_current_day(self) -> int:
+        """Get current day of week (0=Lundi, ..., 5=Samedi, 6=Dimanche)."""
+        from homeassistant.util import dt
+
+        now = dt.now()
+        # weekday() returns 0=Monday, 6=Sunday
+        # Format Aldes: 0=Lundi, 1=Mardi, ..., 6=Dimanche
+        return now.weekday()
+
+    def _get_program_at_slot(self, planning: list[Any]) -> str | None:
+        """
+        Get the active program at current time and day from planning.
+
+        Planning format: each entry is "[heure][jour][mode]"
+        where heure = 0-9 or A-N (for 10-23h), jour = 0-6, mode = B/C/0
+        Example: "K6B" means 20h (K=20), dimanche (6), Confort (B)
+        """
+        if not planning or len(planning) == 0:
+            return None
+
+        current_hour_char = self._get_current_time_slot()
+        current_day = self._get_current_day()
+        current_day_str = str(current_day)
+
+        # Search for matching slot in planning
+        for item in planning:
+            slot_str = None
+            if isinstance(item, dict):
+                slot_str = item.get("command")
+            elif isinstance(item, str):
+                slot_str = item
+
+            if slot_str and len(slot_str) >= 3:
+                # Format: "XYZ" where X=hour char, Y=day digit, Z=mode
+                hour_char = slot_str[0]
+                day_char = slot_str[1]
+
+                if hour_char == current_hour_char and day_char == current_day_str:
+                    return slot_str
+
+        return None
+
+    def _get_heating_program_char(self, slot_data: str) -> str | None:
+        """Extract heating program character from planning slot data ([heure][jour][mode])."""
+        if not slot_data or len(slot_data) < 3:
+            return None
+        # Le mode est le dernier caractère
+        return slot_data[-1]
+
+    def _get_cooling_program_char(self, slot_data: str) -> str | None:
+        """Extract cooling program character from planning slot data ([heure][jour][mode])."""
+        if not slot_data or len(slot_data) < 3:
+            return None
+        # Le mode est aussi le dernier caractère
+        return slot_data[-1]
+
+    def _get_active_program_mode(self, air_mode: AirMode) -> AirMode | None:
+        """
+        Get the effective HVAC mode considering the active program.
+
+        If in program mode (HEAT_PROG_A, HEAT_PROG_B, COOL_PROG_A, COOL_PROG_B),
+        adjust the mode based on what program is active in the planning.
+        """
+        if not self.coordinator.data:
+            return None
+        _LOGGER.debug("Calculating active program mode for air_mode: %s", air_mode)
+        # Check if we're in a program mode
+        is_heating_prog_a = air_mode == AirMode.HEAT_PROG_A
+        is_heating_prog_b = air_mode == AirMode.HEAT_PROG_B
+        is_cooling_prog_a = air_mode == AirMode.COOL_PROG_A
+        is_cooling_prog_b = air_mode == AirMode.COOL_PROG_B
+
+        # Determine heating/cooling and get planning data
+        if is_heating_prog_a or is_heating_prog_b:
+            planning_key = "week_planning" if is_heating_prog_a else "week_planning2"
+            planning = getattr(self.coordinator.data, planning_key, [])
+            slot_data = self._get_program_at_slot(planning)
+            program_char = (
+                self._get_heating_program_char(slot_data) if slot_data else None
+            )
+
+            _LOGGER.debug(
+                "Heating program mode: air_mode=%s, planning_key=%s, slot_data=%s, "
+                "program_char=%s",
+                air_mode,
+                planning_key,
+                slot_data,
+                program_char,
+            )
+
+            # Map heating program character to effective air mode
+            heating_modes = {
+                PROGRAM_OFF: AirMode.OFF,
+                PROGRAM_COMFORT: AirMode.HEAT_COMFORT,
+                PROGRAM_ECO: AirMode.HEAT_ECO,
+            }
+            result = heating_modes.get(program_char) if program_char else None
+            _LOGGER.debug("Heating mode result: %s", result)
+            return result
+
+        if is_cooling_prog_a or is_cooling_prog_b:
+            planning_key = "week_planning3" if is_cooling_prog_a else "week_planning4"
+            planning = getattr(self.coordinator.data, planning_key, [])
+            slot_data = self._get_program_at_slot(planning)
+            program_char = (
+                self._get_cooling_program_char(slot_data) if slot_data else None
+            )
+
+            _LOGGER.debug(
+                "Cooling program mode: air_mode=%s, planning_key=%s, slot_data=%s, "
+                "program_char=%s",
+                air_mode,
+                planning_key,
+                slot_data,
+                program_char,
+            )
+
+            # Map cooling program character to effective air mode
+            # Cooling planning only uses: 0=Off, B=Comfort (no Eco mode)
+            cooling_modes = {
+                PROGRAM_OFF: AirMode.OFF,
+                PROGRAM_COMFORT: AirMode.COOL_COMFORT,
+            }
+            result = cooling_modes.get(program_char) if program_char else None
+            _LOGGER.debug("Cooling mode result: %s", result)
+            return result
+
+        return None
+
     @property
     def min_temp(self) -> float | None:
         """Get the minimum temperature based on the current mode."""
@@ -105,8 +265,20 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         if self.coordinator.data is None:
             return None
 
-        mode = self.coordinator.data.indicator.current_air_mode
-        is_heating_mode = mode not in [AirMode.COOL_COMFORT, AirMode.COOL_BOOST]
+        # Use the effective mode that was calculated in _async_update_attrs
+        effective_mode = self._effective_air_mode
+
+        # Fallback: if not yet set, calculate it now
+        if effective_mode is None:
+            air_mode = self.coordinator.data.indicator.current_air_mode
+            effective_mode = self._get_active_program_mode(air_mode) or air_mode
+
+        # Determine if heating based on effective mode
+        is_heating_mode = effective_mode not in [
+            AirMode.COOL_COMFORT,
+            AirMode.COOL_BOOST,
+            AirMode.OFF,
+        ]
 
         temp_key_map = {
             "min": ("cmist", "fmist"),  # (heating, cooling)
@@ -118,7 +290,7 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         temperature = getattr(self.coordinator.data.indicator, temp_key, None)
 
         # Apply ECO mode offset for heating modes
-        if temperature is not None and mode == AirMode.HEAT_ECO:
+        if temperature is not None and effective_mode == AirMode.HEAT_ECO:
             temperature = temperature - ECO_MODE_TEMPERATURE_OFFSET
 
         return temperature
@@ -141,14 +313,22 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         self._attr_current_temperature = thermostat.current_temperature
 
         air_mode = self.coordinator.data.indicator.current_air_mode
-        self._attr_hvac_mode = self._determine_hvac_mode(air_mode)
-        self._attr_hvac_action = self._determine_hvac_action(air_mode)
+
+        # Get the effective mode considering active program
+        self._effective_air_mode = self._get_active_program_mode(air_mode) or air_mode
+
+        self._attr_hvac_mode = self._determine_hvac_mode(self._effective_air_mode)
 
         # ECO mode displays temperature offset for user clarity
         temperature_offset = (
-            ECO_MODE_TEMPERATURE_OFFSET if air_mode == AirMode.HEAT_ECO else 0
+            ECO_MODE_TEMPERATURE_OFFSET
+            if self._effective_air_mode == AirMode.HEAT_ECO
+            else 0
         )
         self._attr_target_temperature = thermostat.temperature_set - temperature_offset
+
+        # Determine action AFTER target_temperature is set
+        self._attr_hvac_action = self._determine_hvac_action(self._effective_air_mode)
 
     def _get_thermostat_by_id(self, target_id: int) -> ThermostatApiEntity | None:
         """Return thermostat object by id."""
@@ -162,7 +342,11 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         )
 
     def _determine_hvac_mode(self, air_mode: AirMode) -> HVACMode:
-        """Determine HVAC mode from air mode."""
+        """
+        Determine HVAC mode from air mode.
+
+        For program modes, the display adapts based on active program.
+        """
         # Group modes by their HVAC equivalent
         mode_mapping = {
             AirMode.OFF: HVACMode.OFF,
@@ -178,12 +362,10 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         return mode_mapping.get(air_mode, HVACMode.AUTO)
 
     def _determine_hvac_action(self, air_mode: AirMode) -> HVACAction:
-        """Determine HVAC action based on current vs target temperature."""
-        # Return OFF if mode is OFF
+        """Determine HVAC action based on current vs target temperature, en tenant compte du mode Eco réel."""
         if air_mode == AirMode.OFF:
             return HVACAction.OFF
 
-        # Check if temperatures are available
         if (
             self._attr_current_temperature is None
             or self._attr_target_temperature is None
@@ -191,9 +373,9 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             return HVACAction.OFF
 
         current_temperature = self._attr_current_temperature
-        target_temperature = getattr(
-            self, "_real_target", self._attr_target_temperature
-        )
+
+        # Utilise la consigne réelle (celle affichée à l'utilisateur)
+        target_temperature = self._attr_target_temperature
 
         # Heating modes
         if air_mode in [
@@ -224,16 +406,19 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         return HVACAction.OFF
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set new target temperature."""
+        """Set new target temperature sans double offset Eco."""
         target_temperature = kwargs.get(ATTR_TEMPERATURE)
+        if target_temperature is None:
+            return
 
         air_mode = self.coordinator.data.indicator.current_air_mode
 
-        # ECO mode requires temperature adjustment for heat pump
-        temperature_offset = (
-            ECO_MODE_TEMPERATURE_OFFSET if air_mode == AirMode.HEAT_ECO else 0
-        )
-        pac_target = target_temperature + temperature_offset
+        # On ne rajoute l'offset Eco que si on n'est PAS déjà en mode Eco effectif
+        effective_mode = self._effective_air_mode or air_mode
+        if effective_mode == AirMode.HEAT_ECO:
+            pac_target = int(target_temperature + ECO_MODE_TEMPERATURE_OFFSET)
+        else:
+            pac_target = int(target_temperature)
 
         await self.coordinator.api.set_target_temperature(
             self.modem, self.thermostat.id, self.thermostat.name, pac_target
@@ -243,7 +428,7 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         self._attr_target_temperature = target_temperature
 
         # Update HVAC action immediately based on new target temperature
-        self._attr_hvac_action = self._determine_hvac_action(air_mode)
+        self._attr_hvac_action = self._determine_hvac_action(effective_mode)
 
         # Prevent coordinator from overwriting pending update
         self.coordinator.skip_next_update = True

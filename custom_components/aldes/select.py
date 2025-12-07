@@ -344,13 +344,17 @@ class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
         return None
 
     @property
-    def state(self) -> str:
+    def state(self) -> str | None:
         """Return the current state of household composition."""
         # Access the `people` from the coordinator data
-        people = HouseholdComposition(
-            str(self.coordinator.data.indicator.settings.people)
-        )
-        return self._attr_display_names.get(people, str(people))
+        try:
+            people = HouseholdComposition(
+                str(self.coordinator.data.indicator.settings.people)
+            )
+            return self._attr_display_names.get(people, str(people))
+        except ValueError:
+            # Handle invalid values
+            return None
 
     @property
     def available(self) -> bool:

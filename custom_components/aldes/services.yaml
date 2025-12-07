@@ -1,0 +1,30 @@
+set_week_planning:
+  name: Set week planning
+  description: Set the week planning for an Aldes device
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The entity ID of the planning sensor
+      required: true
+      selector:
+        entity:
+          domain: sensor
+          integration: aldes
+    planning:
+      name: Planning
+      description: Planning data as a string (e.g., "00C")
+      required: true
+      selector:
+        text:
+    mode:
+      name: Mode
+      description: The program mode (A, B, C, or D)
+      required: false
+      default: A
+      selector:
+        select:
+          options:
+            - A
+            - B
+            - C
+            - D
