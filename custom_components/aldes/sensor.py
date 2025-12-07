@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 
@@ -59,6 +59,24 @@ async def async_setup_entry(
                 coordinator,
                 entry,
             )
+        )
+
+        # Add planning sensors
+        sensors.extend(
+            [
+                AldesPlanningEntity(
+                    coordinator, entry, "heating_prog_a", "week_planning"
+                ),
+                AldesPlanningEntity(
+                    coordinator, entry, "heating_prog_b", "week_planning2"
+                ),
+                AldesPlanningEntity(
+                    coordinator, entry, "cooling_prog_c", "week_planning3"
+                ),
+                AldesPlanningEntity(
+                    coordinator, entry, "cooling_prog_d", "week_planning4"
+                ),
+            ]
         )
 
     async_add_entities(sensors)
@@ -236,3 +254,86 @@ class AldesMainRoomTemperatureEntity(BaseAldesSensorEntity):
             else None
         )
         super()._handle_coordinator_update()
+
+
+class AldesPlanningEntity(BaseAldesSensorEntity):
+    """Sensor entity for weekly planning data."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: AldesDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        planning_type: str,
+        planning_key: str,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, config_entry)
+        self.planning_type = planning_type
+        self.planning_key = planning_key
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_planning_{self.planning_type}"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        names = {
+            "heating_prog_a": "Planning Chauffage Programme A",
+            "heating_prog_b": "Planning Chauffage Programme B",
+            "cooling_prog_c": "Planning Climatisation Programme C",
+            "cooling_prog_d": "Planning Climatisation Programme D",
+        }
+        return names.get(self.planning_type, "Planning")
+
+    @property
+    def icon(self) -> str:
+        """Return the icon."""
+        if "heating" in self.planning_type:
+            return "mdi:fire"
+        elif "cooling" in self.planning_type:
+            return "mdi:snowflake"
+        return "mdi:calendar-week"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        if not self.coordinator.data:
+            return None
+
+        try:
+            planning = getattr(self.coordinator.data, self.planning_key, None)
+            if planning and isinstance(planning, list):
+                return f"{len(planning)} items"
+            return None
+        except Exception as e:
+            _LOGGER.error("Error getting planning state %s: %s", self.planning_type, e)
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes with planning data."""
+        if not self.coordinator.data:
+            return {}
+
+        try:
+            planning = getattr(self.coordinator.data, self.planning_key, None)
+            if planning:
+                commands = [
+                    item if isinstance(item, str) else item.get("command")
+                    for item in planning
+                    if (isinstance(item, str) or isinstance(item, dict))
+                ]
+                commands = [c for c in commands if c]
+                return {
+                    "planning_data": commands,
+                    "item_count": len(commands),
+                }
+            return {}
+        except Exception as e:
+            _LOGGER.error(
+                "Error getting planning attributes %s: %s", self.planning_type, e
+            )
+            return {}

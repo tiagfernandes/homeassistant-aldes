@@ -1,5 +1,6 @@
 """AldesEntity class."""
 
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -7,6 +8,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from custom_components.aldes.const import AirMode, HouseholdComposition, WaterMode
 from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SettingsApiEntity:
@@ -93,6 +96,10 @@ class DataApiEntity:
     date_last_filter_update: str
     has_filter: bool
     is_connected: bool
+    week_planning: list[dict[str, str]]
+    week_planning2: list[dict[str, str]]
+    week_planning3: list[dict[str, str]]
+    week_planning4: list[dict[str, str]]
 
     def __init__(self, data: dict[str, Any] | None) -> None:
         """Initialize."""
@@ -106,6 +113,23 @@ class DataApiEntity:
         self.date_last_filter_update = data["dateLastFilterUpdate"] if data else ""
         self.has_filter = data["hasFilter"] if data else False
         self.is_connected = data["isConnected"] if data else False
+        self.week_planning = data["week_planning"] if data else []
+        self.week_planning2 = data["week_planning2"] if data else []
+        self.week_planning3 = data["week_planning3"] if data else []
+        self.week_planning4 = data["week_planning4"] if data else []
+
+        _LOGGER.info(
+            "DataApiEntity initialized - Device: %s (%s), Serial: %s, Connected: %s, "
+            "Plannings loaded: week_planning=%d, week_planning2=%d, week_planning3=%d, week_planning4=%d",
+            self.reference,
+            self.type,
+            self.serial_number,
+            self.is_connected,
+            len(self.week_planning),
+            len(self.week_planning2),
+            len(self.week_planning3),
+            len(self.week_planning4),
+        )
 
 
 class AldesEntity(CoordinatorEntity):

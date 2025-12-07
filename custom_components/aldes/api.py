@@ -176,9 +176,17 @@ class AldesApi:
         _LOGGER.info("Changing antilegionella cycle to: %s", antilegio)
         return await self._send_command(modem, "antilegio", 0, antilegio)
 
+    async def change_week_planning(
+        self, modem: str, planning_str: str, mode: str = "A"
+    ) -> Any:
+        """Change week planning for mode A or B."""
+        method = f"changePlanningMode{mode}"
+        _LOGGER.info("Changing week planning (mode %s): %s", mode, planning_str)
+        return await self._send_command(modem, method, 1, planning_str)
+
     async def _send_command(self, modem: str, method: str, uid: int, param: str) -> Any:
         """Send JSON-RPC command to device."""
-        _LOGGER.debug(
+        _LOGGER.info(
             "Sending command to modem %s - method: %s, id: %s, param: %s",
             modem,
             method,
