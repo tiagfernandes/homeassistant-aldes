@@ -153,3 +153,12 @@ class AldesEntity(CoordinatorEntity):
         self.reference = coordinator.data.reference
         self.modem = coordinator.data.modem
         self.is_connected = coordinator.data.is_connected
+
+    @property
+    def name(self) -> str | None:
+        """Return the name of the entity."""
+        return self._friendly_name_internal()
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name - to be overridden by subclasses."""
+        return None

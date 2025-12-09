@@ -184,6 +184,17 @@ class AldesApi:
         _LOGGER.info("Changing week planning (mode %s): %s", mode, planning_str)
         return await self._send_command(modem, method, 1, planning_str)
 
+    async def reset_filter(self, modem: str) -> Any:
+        """Reset filter wear indicator."""
+        _LOGGER.info("Resetting filter for modem %s", modem)
+        async with await self._request_with_auth_interceptor(
+            self._session.patch,
+            f"{self._API_URL_PRODUCTS}/{modem}/resetFilter",
+        ) as response:
+            result = await response.json()
+            _LOGGER.debug("Reset filter response: %s", result)
+            return result
+
     async def _send_command(self, modem: str, method: str, uid: int, param: str) -> Any:
         """Send JSON-RPC command to device."""
         _LOGGER.info(

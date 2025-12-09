@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -9,6 +10,7 @@ from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.const import PERCENTAGE, UnitOfTemperature, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, FRIENDLY_NAMES, MANUFACTURER
 from .entity import AldesEntity, ThermostatApiEntity
@@ -47,6 +49,22 @@ async def async_setup_entry(
     # Collect Main Room Temperature sensor
     sensors.append(
         AldesMainRoomTemperatureEntity(
+            coordinator,
+            entry,
+        )
+    )
+
+    # Add filter sensor (always present)
+    sensors.append(
+        AldesFilterDateSensorEntity(
+            coordinator,
+            entry,
+        )
+    )
+
+    # Add last updated sensor
+    sensors.append(
+        AldesLastUpdatedSensorEntity(
             coordinator,
             entry,
         )
@@ -337,3 +355,81 @@ class AldesPlanningEntity(BaseAldesSensorEntity):
                 "Error getting planning attributes %s: %s", self.planning_type, e
             )
             return {}
+
+
+class AldesFilterDateSensorEntity(BaseAldesSensorEntity):
+    """Define an Aldes filter last change date sensor."""
+
+    _attr_icon = "mdi:air-filter"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_filter_last_change"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Date dernier changement filtre"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Update attributes when the coordinator updates."""
+        if (
+            self.coordinator.data is not None
+            and self.coordinator.data.date_last_filter_update
+        ):
+            # Parse UTC timestamp and convert to datetime object
+            try:
+                utc_dt = datetime.fromisoformat(
+                    self.coordinator.data.date_last_filter_update.replace("Z", "+00:00")
+                )
+                # Convert to Home Assistant timezone
+                local_dt = dt_util.as_local(utc_dt)
+                self._update_state(local_dt)
+            except (ValueError, AttributeError) as e:
+                _LOGGER.warning("Failed to parse filter date: %s", e)
+                self._update_state(None)
+        else:
+            self._update_state(None)
+        super()._handle_coordinator_update()
+
+
+class AldesLastUpdatedSensorEntity(BaseAldesSensorEntity):
+    """Define an Aldes last updated date sensor."""
+
+    _attr_icon = "mdi:update"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_last_updated"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Dernière mise à jour"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Update attributes when the coordinator updates."""
+        if (
+            self.coordinator.data is not None
+            and self.coordinator.data.last_updated_date
+        ):
+            # Parse UTC timestamp and convert to datetime object
+            try:
+                utc_dt = datetime.fromisoformat(
+                    self.coordinator.data.last_updated_date.replace("Z", "+00:00")
+                )
+                # Convert to Home Assistant timezone
+                local_dt = dt_util.as_local(utc_dt)
+                self._update_state(local_dt)
+            except (ValueError, AttributeError) as e:
+                _LOGGER.warning("Failed to parse last updated date: %s", e)
+                self._update_state(None)
+        else:
+            self._update_state(None)
+        super()._handle_coordinator_update()
