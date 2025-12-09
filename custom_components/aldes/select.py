@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+import logging
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import (
@@ -28,6 +30,8 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
     from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -109,6 +113,9 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
             AirMode.COOL_PROG_A: "Rafraîchissement Prog A",
             AirMode.COOL_PROG_B: "Rafraîchissement Prog B",
         }
+        # Track pending mode changes for retry mechanism
+        self._pending_mode_change: dict[str, Any] | None = None
+        self._retry_mode_task: asyncio.Task | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -149,13 +156,15 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
     def state(self) -> str:
         """Return the current state of the air mode."""
         # Access the `current_air_mode` from the coordinator data
+        if self.coordinator.data is None:
+            return "unavailable"
         mode = self.coordinator.data.indicator.current_air_mode
         return self._attr_display_names.get(mode, mode)
 
     @property
     def available(self) -> bool:
         """Return True if the entity is available."""
-        return self.coordinator.data.is_connected
+        return self.coordinator.data is not None and self.coordinator.data.is_connected
 
     @property
     def icon(self) -> str:
@@ -177,9 +186,79 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
         self._attr_current_option = selected_option
         self.async_write_ha_state()
 
+        # Cancel any existing retry task
+        if self._retry_mode_task and not self._retry_mode_task.done():
+            self._retry_mode_task.cancel()
+
+        # Store the pending change for retry verification
+        self._pending_mode_change = {
+            "expected_mode": selected_option,
+        }
+
+        # Schedule retry check after 1 minute
+        self._retry_mode_task = asyncio.create_task(
+            self._verify_air_mode_change_after_delay()
+        )
+
     async def _set_air_mode(self, mode: str) -> None:
         """Send a command to change the air mode."""
         await self.coordinator.api.change_mode(self.modem, mode, CommandUid.AIR_MODE)
+
+    async def _verify_air_mode_change_after_delay(self) -> None:
+        """Verify air mode change after 1 minute and retry if needed."""
+        try:
+            await asyncio.sleep(60)
+
+            if not self._pending_mode_change:
+                return
+
+            # Force a coordinator refresh to get latest data
+            await self.coordinator.async_request_refresh()
+
+            # Wait a bit for the refresh to complete
+            await asyncio.sleep(2)
+
+            # Check if coordinator data is available
+            if self.coordinator.data is None:
+                _LOGGER.warning(
+                    "Coordinator data is None, cannot verify air mode change"
+                )
+                self._pending_mode_change = None
+                return
+
+            expected_mode = self._pending_mode_change["expected_mode"]
+            current_mode = self.coordinator.data.indicator.current_air_mode
+
+            # If the mode hasn't changed, retry the API call
+            if current_mode != expected_mode:
+                _LOGGER.warning(
+                    "Air mode not updated after 1 minute (expected: %s, actual: %s). Retrying API call...",
+                    expected_mode,
+                    current_mode,
+                )
+
+                # Retry the API call
+                await self.coordinator.api.change_mode(
+                    self.modem, expected_mode.value, CommandUid.AIR_MODE
+                )
+
+                # Force another refresh after retry
+                await asyncio.sleep(2)
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.debug(
+                    "Air mode successfully updated to %s",
+                    expected_mode,
+                )
+
+            # Clear pending change
+            self._pending_mode_change = None
+
+        except asyncio.CancelledError:
+            _LOGGER.debug("Air mode verification cancelled")
+        except Exception as e:
+            _LOGGER.error("Error verifying air mode change: %s", e)
+            self._pending_mode_change = None
 
 
 class AldesWaterModeEntity(AldesEntity, SelectEntity):
@@ -204,6 +283,9 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
             WaterMode.ON: "On",
             WaterMode.BOOST: "Boost",
         }
+        # Track pending mode changes for retry mechanism
+        self._pending_water_mode_change: dict[str, Any] | None = None
+        self._retry_water_mode_task: asyncio.Task | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -244,13 +326,15 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
     def state(self) -> str:
         """Return the current state of the watter mode."""
         # Access the `current_water_mode` from the coordinator data
+        if self.coordinator.data is None:
+            return "unavailable"
         mode = self.coordinator.data.indicator.current_water_mode
         return self._attr_display_names.get(mode, mode)
 
     @property
     def available(self) -> bool:
         """Return True if the entity is available."""
-        return self.coordinator.data.is_connected
+        return self.coordinator.data is not None and self.coordinator.data.is_connected
 
     @property
     def icon(self) -> str:
@@ -274,9 +358,79 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
         self._attr_current_option = selected_option
         self.async_write_ha_state()
 
+        # Cancel any existing retry task
+        if self._retry_water_mode_task and not self._retry_water_mode_task.done():
+            self._retry_water_mode_task.cancel()
+
+        # Store the pending change for retry verification
+        self._pending_water_mode_change = {
+            "expected_mode": selected_option,
+        }
+
+        # Schedule retry check after 1 minute
+        self._retry_water_mode_task = asyncio.create_task(
+            self._verify_water_mode_change_after_delay()
+        )
+
     async def _set_water_mode(self, mode: str) -> None:
         """Send a command to change the water mode."""
         await self.coordinator.api.change_mode(self.modem, mode, CommandUid.HOT_WATER)
+
+    async def _verify_water_mode_change_after_delay(self) -> None:
+        """Verify water mode change after 1 minute and retry if needed."""
+        try:
+            await asyncio.sleep(60)
+
+            if not self._pending_water_mode_change:
+                return
+
+            # Force a coordinator refresh to get latest data
+            await self.coordinator.async_request_refresh()
+
+            # Wait a bit for the refresh to complete
+            await asyncio.sleep(2)
+
+            # Check if coordinator data is available
+            if self.coordinator.data is None:
+                _LOGGER.warning(
+                    "Coordinator data is None, cannot verify water mode change"
+                )
+                self._pending_water_mode_change = None
+                return
+
+            expected_mode = self._pending_water_mode_change["expected_mode"]
+            current_mode = self.coordinator.data.indicator.current_water_mode
+
+            # If the mode hasn't changed, retry the API call
+            if current_mode != expected_mode:
+                _LOGGER.warning(
+                    "Water mode not updated after 1 minute (expected: %s, actual: %s). Retrying API call...",
+                    expected_mode,
+                    current_mode,
+                )
+
+                # Retry the API call
+                await self.coordinator.api.change_mode(
+                    self.modem, expected_mode.value, CommandUid.HOT_WATER
+                )
+
+                # Force another refresh after retry
+                await asyncio.sleep(2)
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.debug(
+                    "Water mode successfully updated to %s",
+                    expected_mode,
+                )
+
+            # Clear pending change
+            self._pending_water_mode_change = None
+
+        except asyncio.CancelledError:
+            _LOGGER.debug("Water mode verification cancelled")
+        except Exception as e:
+            _LOGGER.error("Error verifying water mode change: %s", e)
+            self._pending_water_mode_change = None
 
 
 class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
@@ -347,6 +501,8 @@ class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
     def state(self) -> str | None:
         """Return the current state of household composition."""
         # Access the `people` from the coordinator data
+        if self.coordinator.data is None:
+            return "unavailable"
         try:
             people = HouseholdComposition(
                 str(self.coordinator.data.indicator.settings.people)
@@ -354,12 +510,12 @@ class AldesHouseholdCompositionEntity(AldesEntity, SelectEntity):
             return self._attr_display_names.get(people, str(people))
         except ValueError:
             # Handle invalid values
-            return None
+            return "unknown"
 
     @property
     def available(self) -> bool:
         """Return True if the entity is available."""
-        return self.coordinator.data.is_connected
+        return self.coordinator.data is not None and self.coordinator.data.is_connected
 
     @property
     def icon(self) -> str:
@@ -462,6 +618,8 @@ class AldesAntilegionellaCycleEntity(AldesEntity, SelectEntity):
     def state(self) -> str:
         """Return the current state of antilegionella cycle."""
         # Access the `antilegio` from the coordinator data
+        if self.coordinator.data is None:
+            return "unavailable"
         antilegio = AntilegionellaCycle(
             str(self.coordinator.data.indicator.settings.antilegio)
         )
@@ -470,7 +628,7 @@ class AldesAntilegionellaCycleEntity(AldesEntity, SelectEntity):
     @property
     def available(self) -> bool:
         """Return True if the entity is available."""
-        return self.coordinator.data.is_connected
+        return self.coordinator.data is not None and self.coordinator.data.is_connected
 
     @property
     def icon(self) -> str:

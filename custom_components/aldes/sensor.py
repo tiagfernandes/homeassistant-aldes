@@ -235,9 +235,13 @@ class AldesWaterEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-        quantity = min(100, max(self.coordinator.data.indicator.hot_water_quantity, 0))
-
-        self._update_state(quantity if self.coordinator.data.is_connected else None)
+        if self.coordinator.data is None:
+            self._update_state(None)
+        else:
+            quantity = min(
+                100, max(self.coordinator.data.indicator.hot_water_quantity, 0)
+            )
+            self._update_state(quantity if self.coordinator.data.is_connected else None)
         super()._handle_coordinator_update()
 
 
@@ -266,11 +270,14 @@ class AldesMainRoomTemperatureEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-        self._update_state(
-            self.coordinator.data.indicator.main_temperature
-            if self.coordinator.data.is_connected
-            else None
-        )
+        if self.coordinator.data is None:
+            self._update_state(None)
+        else:
+            self._update_state(
+                self.coordinator.data.indicator.main_temperature
+                if self.coordinator.data.is_connected
+                else None
+            )
         super()._handle_coordinator_update()
 
 
@@ -319,16 +326,16 @@ class AldesPlanningEntity(BaseAldesSensorEntity):
     def native_value(self) -> str | None:
         """Return the state."""
         if not self.coordinator.data:
-            return None
+            return "unavailable"
 
         try:
             planning = getattr(self.coordinator.data, self.planning_key, None)
             if planning and isinstance(planning, list):
                 return f"{len(planning)} items"
-            return None
+            return "unknown"
         except Exception as e:
             _LOGGER.error("Error getting planning state %s: %s", self.planning_type, e)
-            return None
+            return "error"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

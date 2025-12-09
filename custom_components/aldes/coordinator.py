@@ -42,9 +42,19 @@ class AldesDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Update data via library."""
         if self.skip_next_update:
             self.skip_next_update = False
-            return None
+            # Return existing data instead of None to avoid losing state
+            return self.data if hasattr(self, "data") and self.data else None
         try:
             async with async_timeout.timeout(self._API_TIMEOUT):
-                return await self.api.fetch_data()
+                data = await self.api.fetch_data()
+                # If we got None or invalid data, keep existing data
+                if data is None and hasattr(self, "data") and self.data:
+                    _LOGGER.warning("Received None from API, keeping existing data")
+                    return self.data
+                return data
         except Exception as exception:
+            # On error, keep existing data if available
+            if hasattr(self, "data") and self.data:
+                _LOGGER.error("Error updating data, keeping existing: %s", exception)
+                return self.data
             raise UpdateFailed(exception) from exception

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -86,6 +87,12 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         self._attr_hvac_action = HVACAction.OFF
         # Store effective mode for use in temperature calculations
         self._effective_air_mode: AirMode | None = None
+        # Track pending temperature changes for retry mechanism
+        self._pending_temperature_change: dict[str, Any] | None = None
+        self._retry_task: asyncio.Task | None = None
+        # Track pending mode changes for retry mechanism
+        self._pending_mode_change: dict[str, Any] | None = None
+        self._retry_mode_task: asyncio.Task | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -304,6 +311,10 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
     @callback
     def _async_update_attrs(self) -> None:
         """Update attributes based on coordinator data."""
+        if self.coordinator.data is None:
+            self._attr_current_temperature = None
+            return
+
         thermostat = self._get_thermostat_by_id(self.thermostat.id)
 
         if not thermostat or not self.coordinator.data.is_connected:
@@ -332,6 +343,9 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
 
     def _get_thermostat_by_id(self, target_id: int) -> ThermostatApiEntity | None:
         """Return thermostat object by id."""
+        if self.coordinator.data is None:
+            return None
+
         return next(
             (
                 thermostat
@@ -436,6 +450,96 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         # Update Home Assistant state
         self.async_write_ha_state()
 
+        # Cancel any existing retry task
+        if self._retry_task and not self._retry_task.done():
+            self._retry_task.cancel()
+
+        # Store the pending change for retry verification
+        self._pending_temperature_change = {
+            "target": pac_target,
+            "display_target": target_temperature,
+            "effective_mode": effective_mode,
+        }
+
+        # Schedule retry check after 1 minute
+        self._retry_task = asyncio.create_task(
+            self._verify_temperature_change_after_delay()
+        )
+
+    async def _verify_temperature_change_after_delay(self) -> None:
+        """Verify temperature change after 1 minute and retry if needed."""
+        try:
+            await asyncio.sleep(60)
+
+            if not self._pending_temperature_change:
+                return
+
+            # Force a coordinator refresh to get latest data
+            await self.coordinator.async_request_refresh()
+
+            # Wait a bit for the refresh to complete
+            await asyncio.sleep(2)
+
+            # Check if coordinator data is available
+            if self.coordinator.data is None:
+                _LOGGER.warning(
+                    "Coordinator data is None, cannot verify temperature change"
+                )
+                self._pending_temperature_change = None
+                return
+
+            # Check if the temperature was actually updated
+            expected_target = self._pending_temperature_change["target"]
+            current_target = None
+
+            # Find the current thermostat data
+            for thermostat in self.coordinator.data.indicator.thermostats:
+                if thermostat.id == self.thermostat.id:
+                    current_target = thermostat.temperature_set
+                    break
+
+            if current_target is None:
+                _LOGGER.warning(
+                    "Could not find thermostat %s in coordinator data",
+                    self.thermostat.id,
+                )
+                self._pending_temperature_change = None
+                return
+
+            # If the temperature hasn't changed, retry the API call
+            if abs(current_target - expected_target) > 0.5:
+                _LOGGER.warning(
+                    "Temperature not updated after 1 minute (expected: %s, actual: %s). Retrying API call...",
+                    expected_target,
+                    current_target,
+                )
+
+                # Retry the API call
+                await self.coordinator.api.set_target_temperature(
+                    self.modem,
+                    self.thermostat.id,
+                    self.thermostat.name,
+                    expected_target,
+                )
+
+                # Force another refresh after retry
+                await asyncio.sleep(2)
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.debug(
+                    "Temperature successfully updated for thermostat %s",
+                    self.thermostat.id,
+                )
+
+            # Clear pending change
+            self._pending_temperature_change = None
+
+        except asyncio.CancelledError:
+            _LOGGER.debug("Temperature verification cancelled")
+        except Exception as e:
+            _LOGGER.error("Error verifying temperature change: %s", e)
+            self._pending_temperature_change = None
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
         hvac_to_air_mode = {
@@ -454,6 +558,75 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         self._attr_hvac_mode = hvac_mode
         self.coordinator.skip_next_update = True
         self.async_write_ha_state()
+
+        # Cancel any existing retry task
+        if self._retry_mode_task and not self._retry_mode_task.done():
+            self._retry_mode_task.cancel()
+
+        # Store the pending change for retry verification
+        self._pending_mode_change = {
+            "expected_mode": air_mode,
+            "hvac_mode": hvac_mode,
+        }
+
+        # Schedule retry check after 1 minute
+        self._retry_mode_task = asyncio.create_task(
+            self._verify_mode_change_after_delay()
+        )
+
+    async def _verify_mode_change_after_delay(self) -> None:
+        """Verify mode change after 1 minute and retry if needed."""
+        try:
+            await asyncio.sleep(60)
+
+            if not self._pending_mode_change:
+                return
+
+            # Force a coordinator refresh to get latest data
+            await self.coordinator.async_request_refresh()
+
+            # Wait a bit for the refresh to complete
+            await asyncio.sleep(2)
+
+            # Check if coordinator data is available
+            if self.coordinator.data is None:
+                _LOGGER.warning("Coordinator data is None, cannot verify mode change")
+                self._pending_mode_change = None
+                return
+
+            expected_mode = self._pending_mode_change["expected_mode"]
+            current_mode = self.coordinator.data.indicator.current_air_mode
+
+            # If the mode hasn't changed, retry the API call
+            if current_mode != expected_mode:
+                _LOGGER.warning(
+                    "Air mode not updated after 1 minute (expected: %s, actual: %s). Retrying API call...",
+                    expected_mode,
+                    current_mode,
+                )
+
+                # Retry the API call
+                await self.coordinator.api.change_mode(
+                    self.modem, expected_mode.value, CommandUid.AIR_MODE
+                )
+
+                # Force another refresh after retry
+                await asyncio.sleep(2)
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.debug(
+                    "Air mode successfully updated to %s",
+                    expected_mode,
+                )
+
+            # Clear pending change
+            self._pending_mode_change = None
+
+        except asyncio.CancelledError:
+            _LOGGER.debug("Mode verification cancelled")
+        except Exception as e:
+            _LOGGER.error("Error verifying mode change: %s", e)
+            self._pending_mode_change = None
 
     async def async_turn_on(self) -> None:
         """Turn on the climate device."""
