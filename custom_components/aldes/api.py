@@ -218,6 +218,36 @@ class AldesApi:
             _LOGGER.debug("Command response: %s", result)
             return result
 
+    async def get_statistics(
+        self, modem: str, start_date: str, end_date: str, granularity: str = "month"
+    ) -> dict[str, Any] | None:
+        """Get device statistics.
+
+        Args:
+            modem: Device modem ID
+            start_date: Start date in format yyyyMMddHHmmssZ (e.g., 20250101000000Z)
+            end_date: End date in format yyyyMMddHHmmssZ (e.g., 20251231235959Z)
+            granularity: Statistics granularity - 'day', 'week', or 'month'
+
+        Returns:
+            Statistics data or None if request fails
+        """
+        url = f"{self._API_URL_PRODUCTS}/{modem}/statistics/{start_date}/{end_date}/{granularity}"
+
+        try:
+            async with await self._request_with_auth_interceptor(
+                self._session.get,
+                url,
+            ) as response:
+                if response.status == HTTP_OK:
+                    return await response.json()
+                else:
+                    _LOGGER.error("Failed to get statistics: %s", response.status)
+                    return None
+        except Exception as e:
+            _LOGGER.error("Error fetching statistics: %s", e)
+            return None
+
 
 class AuthenticationError(Exception):
     """Authentication failed exception."""

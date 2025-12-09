@@ -79,23 +79,45 @@ async def async_setup_entry(
             )
         )
 
-        # Add planning sensors
+        # Add statistics sensors for AquaAir (includes ECS)
         sensors.extend(
             [
-                AldesPlanningEntity(
-                    coordinator, entry, "heating_prog_a", "week_planning"
-                ),
-                AldesPlanningEntity(
-                    coordinator, entry, "heating_prog_b", "week_planning2"
-                ),
-                AldesPlanningEntity(
-                    coordinator, entry, "cooling_prog_c", "week_planning3"
-                ),
-                AldesPlanningEntity(
-                    coordinator, entry, "cooling_prog_d", "week_planning4"
-                ),
+                AldesECSConsumptionSensor(coordinator, entry),
+                AldesECSCostSensor(coordinator, entry),
+                AldesHeatingConsumptionSensor(coordinator, entry),
+                AldesHeatingCostSensor(coordinator, entry),
+                AldesCoolingConsumptionSensor(coordinator, entry),
+                AldesCoolingCostSensor(coordinator, entry),
             ]
         )
+    else:
+        # Add statistics sensors for other models (no ECS)
+        sensors.extend(
+            [
+                AldesHeatingConsumptionSensor(coordinator, entry),
+                AldesHeatingCostSensor(coordinator, entry),
+                AldesCoolingConsumptionSensor(coordinator, entry),
+                AldesCoolingCostSensor(coordinator, entry),
+            ]
+        )
+
+    # Add planning sensors (for all models)
+    sensors.extend(
+        [
+            AldesPlanningEntity(coordinator, entry, "heating_prog_a", "week_planning"),
+            AldesPlanningEntity(coordinator, entry, "heating_prog_b", "week_planning2"),
+            AldesPlanningEntity(coordinator, entry, "cooling_prog_c", "week_planning3"),
+            AldesPlanningEntity(coordinator, entry, "cooling_prog_d", "week_planning4"),
+        ]
+    )
+
+    # Add kWh price sensors (read-only)
+    sensors.extend(
+        [
+            AldesKwhCreuseSensor(coordinator, entry),
+            AldesKwhPleineSensor(coordinator, entry),
+        ]
+    )
 
     async_add_entities(sensors)
 
@@ -440,3 +462,265 @@ class AldesLastUpdatedSensorEntity(BaseAldesSensorEntity):
         else:
             self._update_state(None)
         super()._handle_coordinator_update()
+
+
+class BaseStatisticsSensor(BaseAldesSensorEntity):
+    """Base class for statistics sensors."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _statistics_data: dict[str, Any] | None = None
+    _fetch_task: Any | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to hass."""
+        await super().async_added_to_hass()
+        # Fetch statistics when entity is added
+        self._fetch_task = self.hass.async_create_task(self._fetch_statistics())
+
+    async def _fetch_statistics(self) -> None:
+        """Fetch statistics from API."""
+        try:
+            # Get current month's data
+            end_date = datetime.utcnow()
+            start_date = end_date.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+
+            start_str = start_date.strftime("%Y%m%d%H%M%SZ")
+            end_str = end_date.strftime("%Y%m%d%H%M%SZ")
+
+            self._statistics_data = await self.coordinator.api.get_statistics(
+                self.modem, start_str, end_str, "month"
+            )
+
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.error("Error fetching statistics: %s", e)
+
+    def _get_latest_stat(self) -> dict[str, Any] | None:
+        """Get the most recent statistic entry."""
+        if not self._statistics_data or "statArray" not in self._statistics_data:
+            return None
+
+        stat_array = self._statistics_data.get("statArray", [])
+        if not stat_array:
+            return None
+
+        # Return the last entry (most recent)
+        return stat_array[-1]
+
+
+class AldesECSConsumptionSensor(BaseStatisticsSensor):
+    """Sensor for ECS (hot water) consumption."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_state_class = "total"
+    _attr_icon = "mdi:water-boiler"
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_ecs_consumption"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Consommation ECS (mois en cours)"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        latest = self._get_latest_stat()
+        if latest and "ecs" in latest:
+            return latest["ecs"].get("consumption")
+        return None
+
+
+class AldesECSCostSensor(BaseStatisticsSensor):
+    """Sensor for ECS (hot water) cost."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_state_class = "total"
+    _attr_icon = "mdi:cash"
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_ecs_cost"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Coût ECS (mois en cours)"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        latest = self._get_latest_stat()
+        if latest and "ecs" in latest:
+            return latest["ecs"].get("cost")
+        return None
+
+
+class AldesHeatingConsumptionSensor(BaseStatisticsSensor):
+    """Sensor for heating consumption."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_state_class = "total"
+    _attr_icon = "mdi:radiator"
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_heating_consumption"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Consommation Chauffage (mois en cours)"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        latest = self._get_latest_stat()
+        if latest and "chauffage" in latest:
+            return latest["chauffage"].get("consumption")
+        return None
+
+
+class AldesHeatingCostSensor(BaseStatisticsSensor):
+    """Sensor for heating cost."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_state_class = "total"
+    _attr_icon = "mdi:cash"
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_heating_cost"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Coût Chauffage (mois en cours)"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        latest = self._get_latest_stat()
+        if latest and "chauffage" in latest:
+            return latest["chauffage"].get("cost")
+        return None
+
+
+class AldesCoolingConsumptionSensor(BaseStatisticsSensor):
+    """Sensor for cooling consumption."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_state_class = "total"
+    _attr_icon = "mdi:snowflake"
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_cooling_consumption"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Consommation Climatisation (mois en cours)"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        latest = self._get_latest_stat()
+        if latest and "clim" in latest:
+            return latest["clim"].get("consumption")
+        return None
+
+
+class AldesCoolingCostSensor(BaseStatisticsSensor):
+    """Sensor for cooling cost."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_state_class = "total"
+    _attr_icon = "mdi:cash"
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_cooling_cost"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Coût Climatisation (mois en cours)"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        latest = self._get_latest_stat()
+        if latest and "clim" in latest:
+            return latest["clim"].get("cost")
+        return None
+
+
+class AldesKwhCreuseSensor(BaseAldesSensorEntity):
+    """Sensor for off-peak hour electricity price (read-only)."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR/kWh"
+    _attr_state_class = None
+    _attr_icon = "mdi:currency-eur"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_kwh_creuse"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Tarif heures creuses"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        if (
+            self.coordinator.data is None
+            or self.coordinator.data.indicator is None
+            or self.coordinator.data.indicator.settings is None
+        ):
+            return None
+        return self.coordinator.data.indicator.settings.kwh_creuse
+
+
+class AldesKwhPleineSensor(BaseAldesSensorEntity):
+    """Sensor for peak hour electricity price (read-only)."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR/kWh"
+    _attr_state_class = None
+    _attr_icon = "mdi:currency-eur"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_kwh_pleine"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Tarif heures pleines"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        if (
+            self.coordinator.data is None
+            or self.coordinator.data.indicator is None
+            or self.coordinator.data.indicator.settings is None
+        ):
+            return None
+        return self.coordinator.data.indicator.settings.kwh_pleine

@@ -17,11 +17,15 @@ class SettingsApiEntity:
 
     people: HouseholdComposition | None
     antilegio: int | None
+    kwh_creuse: float | None
+    kwh_pleine: float | None
 
     def __init__(self, data: dict[str, Any] | None) -> None:
         """Initialize."""
         self.people = data["people"] if data else None
         self.antilegio = data["antilegio"] if data else None
+        self.kwh_creuse = data.get("kwh_creuse") if data else None
+        self.kwh_pleine = data.get("kwh_pleine") if data else None
 
 
 class IndicatorApiEntity:
