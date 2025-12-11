@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass
-from homeassistant.const import PERCENTAGE, UnitOfTemperature, EntityCategory
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.util import dt as dt_util
@@ -21,9 +23,15 @@ if TYPE_CHECKING:
 
     from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
 
-import logging
-
 _LOGGER = logging.getLogger(__name__)
+
+# Constants
+STATISTICS_UPDATE_INTERVAL = 3600  # Update every hour (in seconds)
+WATER_LEVEL_THRESHOLDS = {
+    "low": 25,
+    "medium": 50,
+    "high": 75,
+}
 
 
 async def async_setup_entry(
@@ -70,36 +78,14 @@ async def async_setup_entry(
         )
     )
 
-    # Collect water entities if AquaAir reference
-    if coordinator.data.reference == "TONE_AQUA_AIR":
-        sensors.append(
-            AldesWaterEntity(
-                coordinator,
-                entry,
-            )
-        )
+    # Add AquaAir specific sensors
+    is_aqua_air = coordinator.data.reference == "TONE_AQUA_AIR"
+    if is_aqua_air:
+        sensors.append(AldesWaterEntity(coordinator, entry))
 
-        # Add statistics sensors for AquaAir (includes ECS)
-        sensors.extend(
-            [
-                AldesECSConsumptionSensor(coordinator, entry),
-                AldesECSCostSensor(coordinator, entry),
-                AldesHeatingConsumptionSensor(coordinator, entry),
-                AldesHeatingCostSensor(coordinator, entry),
-                AldesCoolingConsumptionSensor(coordinator, entry),
-                AldesCoolingCostSensor(coordinator, entry),
-            ]
-        )
-    else:
-        # Add statistics sensors for other models (no ECS)
-        sensors.extend(
-            [
-                AldesHeatingConsumptionSensor(coordinator, entry),
-                AldesHeatingCostSensor(coordinator, entry),
-                AldesCoolingConsumptionSensor(coordinator, entry),
-                AldesCoolingCostSensor(coordinator, entry),
-            ]
-        )
+    # Add statistics sensors
+    statistics_sensors = _create_statistics_sensors(coordinator, entry, is_aqua_air)
+    sensors.extend(statistics_sensors)
 
     # Add planning sensors (for all models)
     sensors.extend(
@@ -120,6 +106,36 @@ async def async_setup_entry(
     )
 
     async_add_entities(sensors)
+
+
+def _create_statistics_sensors(
+    coordinator: AldesDataUpdateCoordinator,
+    entry: ConfigEntry,
+    is_aqua_air: bool,
+) -> list[SensorEntity]:
+    """Create statistics sensors based on device type."""
+    sensors = []
+
+    # Add ECS sensors only for AquaAir
+    if is_aqua_air:
+        sensors.extend(
+            [
+                AldesECSConsumptionSensor(coordinator, entry),
+                AldesECSCostSensor(coordinator, entry),
+            ]
+        )
+
+    # Add heating and cooling sensors for all models
+    sensors.extend(
+        [
+            AldesHeatingConsumptionSensor(coordinator, entry),
+            AldesHeatingCostSensor(coordinator, entry),
+            AldesCoolingConsumptionSensor(coordinator, entry),
+            AldesCoolingCostSensor(coordinator, entry),
+        ]
+    )
+
+    return sensors
 
 
 class BaseAldesSensorEntity(AldesEntity, SensorEntity):
@@ -240,17 +256,14 @@ class AldesWaterEntity(BaseAldesSensorEntity):
     @property
     def icon(self) -> str:
         """Return an icon based on water level."""
-        low_threshold = 25
-        medium_threshold = 50
-        high_threshold = 75
-
         if self._state is None or not isinstance(self._state, int | float):
             return "mdi:water-boiler"
-        if self._state <= low_threshold:
+
+        if self._state <= WATER_LEVEL_THRESHOLDS["low"]:
             return "mdi:gauge-empty"
-        if self._state <= medium_threshold:
+        if self._state <= WATER_LEVEL_THRESHOLDS["medium"]:
             return "mdi:gauge-low"
-        if self._state <= high_threshold:
+        if self._state <= WATER_LEVEL_THRESHOLDS["high"]:
             return "mdi:gauge"
         return "mdi:gauge-full"
 
@@ -371,19 +384,35 @@ class AldesPlanningEntity(BaseAldesSensorEntity):
                 commands = [
                     item if isinstance(item, str) else item.get("command")
                     for item in planning
-                    if (isinstance(item, str) or isinstance(item, dict))
+                    if isinstance(item, str | dict)
                 ]
                 commands = [c for c in commands if c]
-                return {
+                result = {
                     "planning_data": commands,
                     "item_count": len(commands),
                 }
-            return {}
+            else:
+                result = {}
         except Exception as e:
             _LOGGER.error(
                 "Error getting planning attributes %s: %s", self.planning_type, e
             )
             return {}
+        else:
+            return result
+
+
+def _parse_utc_to_local(timestamp_str: str | None) -> datetime | None:
+    """Parse UTC timestamp string and convert to local timezone."""
+    if not timestamp_str:
+        return None
+
+    try:
+        utc_dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        return dt_util.as_local(utc_dt)
+    except (ValueError, AttributeError) as e:
+        _LOGGER.warning("Failed to parse timestamp '%s': %s", timestamp_str, e)
+        return None
 
 
 class AldesFilterDateSensorEntity(BaseAldesSensorEntity):
@@ -405,23 +434,12 @@ class AldesFilterDateSensorEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-        if (
-            self.coordinator.data is not None
-            and self.coordinator.data.date_last_filter_update
-        ):
-            # Parse UTC timestamp and convert to datetime object
-            try:
-                utc_dt = datetime.fromisoformat(
-                    self.coordinator.data.date_last_filter_update.replace("Z", "+00:00")
-                )
-                # Convert to Home Assistant timezone
-                local_dt = dt_util.as_local(utc_dt)
-                self._update_state(local_dt)
-            except (ValueError, AttributeError) as e:
-                _LOGGER.warning("Failed to parse filter date: %s", e)
-                self._update_state(None)
-        else:
-            self._update_state(None)
+        timestamp = (
+            self.coordinator.data.date_last_filter_update
+            if self.coordinator.data
+            else None
+        )
+        self._update_state(_parse_utc_to_local(timestamp))
         super()._handle_coordinator_update()
 
 
@@ -444,23 +462,10 @@ class AldesLastUpdatedSensorEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-        if (
-            self.coordinator.data is not None
-            and self.coordinator.data.last_updated_date
-        ):
-            # Parse UTC timestamp and convert to datetime object
-            try:
-                utc_dt = datetime.fromisoformat(
-                    self.coordinator.data.last_updated_date.replace("Z", "+00:00")
-                )
-                # Convert to Home Assistant timezone
-                local_dt = dt_util.as_local(utc_dt)
-                self._update_state(local_dt)
-            except (ValueError, AttributeError) as e:
-                _LOGGER.warning("Failed to parse last updated date: %s", e)
-                self._update_state(None)
-        else:
-            self._update_state(None)
+        timestamp = (
+            self.coordinator.data.last_updated_date if self.coordinator.data else None
+        )
+        self._update_state(_parse_utc_to_local(timestamp))
         super()._handle_coordinator_update()
 
 
@@ -474,8 +479,25 @@ class BaseStatisticsSensor(BaseAldesSensorEntity):
     async def async_added_to_hass(self) -> None:
         """Run when entity is added to hass."""
         await super().async_added_to_hass()
-        # Fetch statistics when entity is added
-        self._fetch_task = self.hass.async_create_task(self._fetch_statistics())
+        self._fetch_task = self.hass.async_create_task(self._fetch_statistics_loop())
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel the update task when entity is removed."""
+        if self._fetch_task:
+            self._fetch_task.cancel()
+        await super().async_will_remove_from_hass()
+
+    async def _fetch_statistics_loop(self) -> None:
+        """Fetch statistics periodically."""
+        while True:
+            try:
+                await self._fetch_statistics()
+                await asyncio.sleep(STATISTICS_UPDATE_INTERVAL)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                _LOGGER.error("Error in statistics fetch loop: %s", e)
+                await asyncio.sleep(STATISTICS_UPDATE_INTERVAL)
 
     async def _fetch_statistics(self) -> None:
         """Fetch statistics from API."""
