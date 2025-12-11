@@ -222,6 +222,39 @@ class AldesApi:
         _LOGGER.info("Cancelling holidays mode for modem %s", modem)
         return await self._send_command(modem, "changeMode", 1, param)
 
+    async def set_kwh_prices(
+        self, modem: str, kwh_pleine: float, kwh_creuse: float
+    ) -> Any:
+        """
+        Set electricity prices for peak and off-peak hours.
+
+        Args:
+            modem: Device modem ID
+            kwh_pleine: Peak hour price in EUR/kWh
+            kwh_creuse: Off-peak hour price in EUR/kWh
+
+        Returns:
+            API response
+
+        """
+        # Convert to millièmes d'euros (multiply by 1000)
+        pleine_milliemes = int(kwh_pleine * 1000)
+        creuse_milliemes = int(kwh_creuse * 1000)
+
+        # Format: P{prixPlein}C{prixCreux}
+        param = f"P{pleine_milliemes}C{creuse_milliemes}"
+
+        _LOGGER.info(
+            "Setting kWh prices for modem %s: pleine=%.3f EUR/kWh (%d), "
+            "creuse=%.3f EUR/kWh (%d)",
+            modem,
+            kwh_pleine,
+            pleine_milliemes,
+            kwh_creuse,
+            creuse_milliemes,
+        )
+        return await self._send_command(modem, "prixkwh", 1, param)
+
     async def set_frost_protection_mode(self, modem: str, start_date: str) -> Any:
         """
         Set frost protection mode (hors gel) with start date and no end date.

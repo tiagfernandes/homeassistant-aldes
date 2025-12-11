@@ -97,14 +97,6 @@ async def async_setup_entry(
         ]
     )
 
-    # Add kWh price sensors (read-only)
-    sensors.extend(
-        [
-            AldesKwhCreuseSensor(coordinator, entry),
-            AldesKwhPleineSensor(coordinator, entry),
-        ]
-    )
-
     # Add holidays and frost protection sensors
     sensors.extend(
         [
@@ -694,66 +686,6 @@ class AldesCoolingCostSensor(BaseStatisticsSensor):
         if latest and "clim" in latest:
             return latest["clim"].get("cost")
         return None
-
-
-class AldesKwhCreuseSensor(BaseAldesSensorEntity):
-    """Sensor for off-peak hour electricity price (read-only)."""
-
-    _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_native_unit_of_measurement = "EUR/kWh"
-    _attr_state_class = None
-    _attr_icon = "mdi:currency-eur"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def unique_id(self) -> str | None:
-        """Return a unique ID to use for this entity."""
-        return f"{self.serial_number}_kwh_creuse"
-
-    def _friendly_name_internal(self) -> str | None:
-        """Return the friendly name."""
-        return "Tarif heures creuses"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the state."""
-        if (
-            self.coordinator.data is None
-            or self.coordinator.data.indicator is None
-            or self.coordinator.data.indicator.settings is None
-        ):
-            return None
-        return self.coordinator.data.indicator.settings.kwh_creuse
-
-
-class AldesKwhPleineSensor(BaseAldesSensorEntity):
-    """Sensor for peak hour electricity price (read-only)."""
-
-    _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_native_unit_of_measurement = "EUR/kWh"
-    _attr_state_class = None
-    _attr_icon = "mdi:currency-eur"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def unique_id(self) -> str | None:
-        """Return a unique ID to use for this entity."""
-        return f"{self.serial_number}_kwh_pleine"
-
-    def _friendly_name_internal(self) -> str | None:
-        """Return the friendly name."""
-        return "Tarif heures pleines"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the state."""
-        if (
-            self.coordinator.data is None
-            or self.coordinator.data.indicator is None
-            or self.coordinator.data.indicator.settings is None
-        ):
-            return None
-        return self.coordinator.data.indicator.settings.kwh_pleine
 
 
 class AldesHolidaysStartSensor(BaseAldesSensorEntity):
