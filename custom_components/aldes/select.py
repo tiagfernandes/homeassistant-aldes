@@ -12,6 +12,7 @@ from homeassistant.const import (
 )
 from homeassistant.helpers.device_registry import DeviceInfo
 
+from .api import CommandUid
 from .const import (
     DOMAIN,
     FRIENDLY_NAMES,
@@ -21,7 +22,6 @@ from .const import (
     HouseholdComposition,
     WaterMode,
 )
-from .api import CommandUid
 from .entity import AldesEntity
 
 if TYPE_CHECKING:

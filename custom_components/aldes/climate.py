@@ -6,13 +6,6 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from custom_components.aldes.api import CommandUid
-from custom_components.aldes.const import (
-    AirMode,
-    DOMAIN,
-    ECO_MODE_TEMPERATURE_OFFSET,
-)
-from custom_components.aldes.entity import AldesEntity, ThermostatApiEntity
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
     ClimateEntityFeature,
@@ -23,6 +16,14 @@ from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+
+from custom_components.aldes.api import CommandUid
+from custom_components.aldes.const import (
+    DOMAIN,
+    ECO_MODE_TEMPERATURE_OFFSET,
+    AirMode,
+)
+from custom_components.aldes.entity import AldesEntity, ThermostatApiEntity
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry

@@ -105,6 +105,15 @@ async def async_setup_entry(
         ]
     )
 
+    # Add holidays and frost protection sensors
+    sensors.extend(
+        [
+            AldesHolidaysStartSensor(coordinator, entry),
+            AldesHolidaysEndSensor(coordinator, entry),
+            AldesHorsGelSensor(coordinator, entry),
+        ]
+    )
+
     async_add_entities(sensors)
 
 
@@ -214,7 +223,6 @@ class AldesThermostatSensorEntity(BaseAldesSensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Update attributes when the coordinator updates."""
-
         if not self.coordinator.data:
             _LOGGER.debug("Coordinator data is None, skipping update")
             return
@@ -353,7 +361,7 @@ class AldesPlanningEntity(BaseAldesSensorEntity):
         """Return the icon."""
         if "heating" in self.planning_type:
             return "mdi:fire"
-        elif "cooling" in self.planning_type:
+        if "cooling" in self.planning_type:
             return "mdi:snowflake"
         return "mdi:calendar-week"
 
@@ -746,3 +754,95 @@ class AldesKwhPleineSensor(BaseAldesSensorEntity):
         ):
             return None
         return self.coordinator.data.indicator.settings.kwh_pleine
+
+
+class AldesHolidaysStartSensor(BaseAldesSensorEntity):
+    """Sensor for holidays start date."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:calendar-start"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_holidays_start"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Début vacances"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the state."""
+        if self.coordinator.data is None or not self.coordinator.data.holidays_start:
+            return None
+        try:
+            # Parse "2025-12-11 20:57:06Z" format
+            return datetime.strptime(
+                self.coordinator.data.holidays_start, "%Y-%m-%d %H:%M:%SZ"
+            ).replace(tzinfo=dt_util.UTC)
+        except (ValueError, TypeError):
+            _LOGGER.warning(
+                "Failed to parse holidays_start: %s",
+                self.coordinator.data.holidays_start,
+            )
+            return None
+
+
+class AldesHolidaysEndSensor(BaseAldesSensorEntity):
+    """Sensor for holidays end date."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:calendar-end"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_holidays_end"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Fin vacances"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the state."""
+        if self.coordinator.data is None or not self.coordinator.data.holidays_end:
+            return None
+        try:
+            # Parse "2025-12-11 20:57:06Z" format
+            return datetime.strptime(
+                self.coordinator.data.holidays_end, "%Y-%m-%d %H:%M:%SZ"
+            ).replace(tzinfo=dt_util.UTC)
+        except (ValueError, TypeError):
+            _LOGGER.warning(
+                "Failed to parse holidays_end: %s",
+                self.coordinator.data.holidays_end,
+            )
+            return None
+
+
+class AldesHorsGelSensor(BaseAldesSensorEntity):
+    """Sensor for frost protection mode."""
+
+    _attr_device_class = None
+    _attr_icon = "mdi:snowflake-alert"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID to use for this entity."""
+        return f"{self.serial_number}_hors_gel"
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name."""
+        return "Mode hors gel"
+
+    @property
+    def native_value(self) -> str:
+        """Return the state."""
+        if self.coordinator.data is None:
+            return "unknown"
+        return "Actif" if self.coordinator.data.hors_gel else "Inactif"

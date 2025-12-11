@@ -6,7 +6,6 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
@@ -152,7 +151,7 @@ class AldesPlanningEntity(AldesEntity, Entity):
         """Return the icon."""
         if "heating" in self.planning_type:
             return "mdi:fire"
-        elif "cooling" in self.planning_type:
+        if "cooling" in self.planning_type:
             return "mdi:snowflake"
         return "mdi:calendar-week"
 

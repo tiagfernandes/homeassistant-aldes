@@ -104,6 +104,9 @@ class DataApiEntity:
     week_planning2: list[dict[str, str]]
     week_planning3: list[dict[str, str]]
     week_planning4: list[dict[str, str]]
+    holidays_start: str | None
+    holidays_end: str | None
+    hors_gel: bool
 
     def __init__(self, data: dict[str, Any] | None) -> None:
         """Initialize."""
@@ -121,6 +124,16 @@ class DataApiEntity:
         self.week_planning2 = data["week_planning2"] if data else []
         self.week_planning3 = data["week_planning3"] if data else []
         self.week_planning4 = data["week_planning4"] if data else []
+
+        # Parse holidays dates and frost protection from indicator if available
+        self.holidays_start = None
+        self.holidays_end = None
+        self.hors_gel = False
+        if data and "indicator" in data and data["indicator"]:
+            indicator_data = data["indicator"]
+            self.holidays_start = indicator_data.get("date_debut_vac")
+            self.holidays_end = indicator_data.get("date_fin_vac")
+            self.hors_gel = indicator_data.get("hors_gel", False)
 
         _LOGGER.info(
             "DataApiEntity initialized - Device: %s (%s), Serial: %s, Connected: %s, "

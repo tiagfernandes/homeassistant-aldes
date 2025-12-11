@@ -184,6 +184,65 @@ class AldesApi:
         _LOGGER.info("Changing week planning (mode %s): %s", mode, planning_str)
         return await self._send_command(modem, method, 1, planning_str)
 
+    async def set_holidays_mode(
+        self, modem: str, start_date: str, end_date: str
+    ) -> Any:
+        """
+        Set holidays mode with start and end dates.
+
+        Args:
+            modem: Device modem ID
+            start_date: Start date in format yyyyMMddHHmmssZ (e.g., 20251220000000Z)
+            end_date: End date in format yyyyMMddHHmmssZ (e.g., 20260105000000Z)
+
+        Returns:
+            API response
+
+        """
+        # Format: W + start_date + end_date (concatenated with W prefix)
+        param = f"W{start_date}{end_date}"
+        _LOGGER.info(
+            "Setting holidays mode for modem %s from %s to %s",
+            modem,
+            start_date,
+            end_date,
+        )
+        return await self._send_command(modem, "changeMode", 1, param)
+
+    async def cancel_holidays_mode(self, modem: str) -> Any:
+        """
+        Cancel holidays mode by setting dates to 0001-01-01.
+
+        Returns:
+            API response
+
+        """
+        # Special format to cancel: W + two dates at epoch start
+        param = "W00010101000000Z00010101000000Z"
+        _LOGGER.info("Cancelling holidays mode for modem %s", modem)
+        return await self._send_command(modem, "changeMode", 1, param)
+
+    async def set_frost_protection_mode(self, modem: str, start_date: str) -> Any:
+        """
+        Set frost protection mode (hors gel) with start date and no end date.
+
+        Args:
+            modem: Device modem ID
+            start_date: Start date in format yyyyMMddHHmmssZ (e.g., 20251220000000Z)
+
+        Returns:
+            API response
+
+        """
+        # Format: W + start_date + 00000000000000Z (no end date for frost protection)
+        param = f"W{start_date}00000000000000Z"
+        _LOGGER.info(
+            "Setting frost protection mode for modem %s from %s",
+            modem,
+            start_date,
+        )
+        return await self._send_command(modem, "changeMode", 1, param)
+
     async def reset_filter(self, modem: str) -> Any:
         """Reset filter wear indicator."""
         _LOGGER.info("Resetting filter for modem %s", modem)
@@ -197,22 +256,22 @@ class AldesApi:
 
     async def _send_command(self, modem: str, method: str, uid: int, param: str) -> Any:
         """Send JSON-RPC command to device."""
+        json_payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "id": uid,
+            "params": [param],
+        }
         _LOGGER.info(
-            "Sending command to modem %s - method: %s, id: %s, param: %s",
-            modem,
+            "Sending command: %s to modem %s",
             method,
-            uid,
-            param,
+            modem,
         )
+        _LOGGER.debug("Command payload: %s", json_payload)
         async with await self._request_with_auth_interceptor(
             self._session.post,
             f"{self._API_URL_PRODUCTS}/{modem}/commands",
-            json={
-                "jsonrpc": "2.0",
-                "method": method,
-                "id": uid,
-                "params": [param],
-            },
+            json=json_payload,
         ) as response:
             result = await response.json()
             _LOGGER.debug("Command response: %s", result)
@@ -221,7 +280,8 @@ class AldesApi:
     async def get_statistics(
         self, modem: str, start_date: str, end_date: str, granularity: str = "month"
     ) -> dict[str, Any] | None:
-        """Get device statistics.
+        """
+        Get device statistics.
 
         Args:
             modem: Device modem ID
@@ -231,8 +291,12 @@ class AldesApi:
 
         Returns:
             Statistics data or None if request fails
+
         """
-        url = f"{self._API_URL_PRODUCTS}/{modem}/statistics/{start_date}/{end_date}/{granularity}"
+        url = (
+            f"{self._API_URL_PRODUCTS}/{modem}/statistics/"
+            f"{start_date}/{end_date}/{granularity}"
+        )
 
         try:
             async with await self._request_with_auth_interceptor(
@@ -241,9 +305,8 @@ class AldesApi:
             ) as response:
                 if response.status == HTTP_OK:
                     return await response.json()
-                else:
-                    _LOGGER.error("Failed to get statistics: %s", response.status)
-                    return None
+                _LOGGER.error("Failed to get statistics: %s", response.status)
+                return None
         except Exception as e:
             _LOGGER.error("Error fetching statistics: %s", e)
             return None
