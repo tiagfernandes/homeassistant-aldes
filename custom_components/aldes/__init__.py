@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     # Register web resources for Lovelace card
-    _register_lovelace_resources(hass)
+    await _register_lovelace_resources(hass)
 
     # Register services
     await _register_services(hass)
@@ -76,7 +76,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await async_setup_entry(hass, entry)
 
 
-def _register_lovelace_resources(hass: HomeAssistant) -> None:
+async def _register_lovelace_resources(hass: HomeAssistant) -> None:
     """Register Lovelace card resources."""
     import shutil
     from aiohttp import web
@@ -85,11 +85,16 @@ def _register_lovelace_resources(hass: HomeAssistant) -> None:
     # Copy card to www folder for easier access
     card_source = Path(__file__).parent / "lovelace" / "aldes-planning-card.js"
     www_dir = Path(hass.config.path("www"))
-    www_dir.mkdir(exist_ok=True)
-    card_dest = www_dir / "aldes-planning-card.js"
+
+    def _copy_card():
+        """Copy card file to www directory."""
+        www_dir.mkdir(exist_ok=True)
+        card_dest = www_dir / "aldes-planning-card.js"
+        shutil.copy2(card_source, card_dest)
+        return card_dest
 
     try:
-        shutil.copy2(card_source, card_dest)
+        card_dest = await hass.async_add_executor_job(_copy_card)
         _LOGGER.info("Aldes planning card copied to %s", card_dest)
     except Exception as e:
         _LOGGER.error("Failed to copy card to www folder: %s", e)
