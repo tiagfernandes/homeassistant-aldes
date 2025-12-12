@@ -78,8 +78,21 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 def _register_lovelace_resources(hass: HomeAssistant) -> None:
     """Register Lovelace card resources."""
+    import shutil
     from aiohttp import web
     from homeassistant.components.http import HomeAssistantView
+
+    # Copy card to www folder for easier access
+    card_source = Path(__file__).parent / "lovelace" / "aldes-planning-card.js"
+    www_dir = Path(hass.config.path("www"))
+    www_dir.mkdir(exist_ok=True)
+    card_dest = www_dir / "aldes-planning-card.js"
+
+    try:
+        shutil.copy2(card_source, card_dest)
+        _LOGGER.info("Aldes planning card copied to %s", card_dest)
+    except Exception as e:
+        _LOGGER.error("Failed to copy card to www folder: %s", e)
 
     class AldesCardView(HomeAssistantView):
         """View to serve the Aldes planning card."""
