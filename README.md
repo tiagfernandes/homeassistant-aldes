@@ -42,7 +42,7 @@ Pour utiliser la carte de planning avec grille éditable :
    type: module
    ```
 
-   > **Note** : Le fichier est automatiquement copié dans le dossier `www` lors de l'installation. Vous pouvez aussi utiliser `/aldes_planning_card.js` si vous préférez.
+   > **Note** : Le fichier est automatiquement copié dans le dossier `www` lors de l'installation de l'intégration.
 
 2. **Ajouter la carte à votre tableau de bord**
    Configuration minimale (auto-découverte des plannings) :
