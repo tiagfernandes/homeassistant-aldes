@@ -38,11 +38,9 @@ Pour utiliser la carte de planning avec grille éditable :
 1. **Déclarer la ressource Lovelace**
    Allez dans **Paramètres → Tableaux de bord → Ressources** et ajoutez :
    ```yaml
-   url: /local/aldes-planning-card.js
+   url: /aldes_planning_card.js
    type: module
    ```
-
-   > **Note** : Le fichier est automatiquement copié dans le dossier `www` lors de l'installation de l'intégration.
 
 2. **Ajouter la carte à votre tableau de bord**
    Configuration minimale (auto-découverte des plannings) :

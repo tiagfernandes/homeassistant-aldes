@@ -78,26 +78,8 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def _register_lovelace_resources(hass: HomeAssistant) -> None:
     """Register Lovelace card resources."""
-    import shutil
     from aiohttp import web
     from homeassistant.components.http import HomeAssistantView
-
-    # Copy card to www folder for easier access
-    card_source = Path(__file__).parent / "lovelace" / "aldes-planning-card.js"
-    www_dir = Path(hass.config.path("www"))
-
-    def _copy_card():
-        """Copy card file to www directory."""
-        www_dir.mkdir(exist_ok=True)
-        card_dest = www_dir / "aldes-planning-card.js"
-        shutil.copy2(card_source, card_dest)
-        return card_dest
-
-    try:
-        card_dest = await hass.async_add_executor_job(_copy_card)
-        _LOGGER.info("Aldes planning card copied to %s", card_dest)
-    except Exception as e:
-        _LOGGER.error("Failed to copy card to www folder: %s", e)
 
     class AldesCardView(HomeAssistantView):
         """View to serve the Aldes planning card."""
@@ -108,15 +90,11 @@ async def _register_lovelace_resources(hass: HomeAssistant) -> None:
 
         async def get(self, request):
             """Serve the card JavaScript file."""
-            _LOGGER.info("Aldes planning card requested")
             card_path = Path(__file__).parent / "lovelace" / "aldes-planning-card.js"
             try:
                 # Use executor to avoid blocking the event loop
                 content = await hass.async_add_executor_job(
                     card_path.read_text, "utf-8"
-                )
-                _LOGGER.debug(
-                    "Serving card from: %s (%d bytes)", card_path, len(content)
                 )
                 return web.Response(
                     text=content,
