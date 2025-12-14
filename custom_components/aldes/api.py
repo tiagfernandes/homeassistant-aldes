@@ -176,28 +176,173 @@ class AldesApi:
         _LOGGER.info("Changing antilegionella cycle to: %s", antilegio)
         return await self._send_command(modem, "antilegio", 0, antilegio)
 
+    async def change_week_planning(
+        self, modem: str, planning_str: str, mode: str = "A"
+    ) -> Any:
+        """Change week planning for mode A or B."""
+        method = f"changePlanningMode{mode}"
+        _LOGGER.info("Changing week planning (mode %s): %s", mode, planning_str)
+        return await self._send_command(modem, method, 1, planning_str)
+
+    async def set_holidays_mode(
+        self, modem: str, start_date: str, end_date: str
+    ) -> Any:
+        """
+        Set holidays mode with start and end dates.
+
+        Args:
+            modem: Device modem ID
+            start_date: Start date in format yyyyMMddHHmmssZ (e.g., 20251220000000Z)
+            end_date: End date in format yyyyMMddHHmmssZ (e.g., 20260105000000Z)
+
+        Returns:
+            API response
+
+        """
+        # Format: W + start_date + end_date (concatenated with W prefix)
+        param = f"W{start_date}{end_date}"
+        _LOGGER.info(
+            "Setting holidays mode for modem %s from %s to %s",
+            modem,
+            start_date,
+            end_date,
+        )
+        return await self._send_command(modem, "changeMode", 1, param)
+
+    async def cancel_holidays_mode(self, modem: str) -> Any:
+        """
+        Cancel holidays mode by setting dates to 0001-01-01.
+
+        Returns:
+            API response
+
+        """
+        # Special format to cancel: W + two dates at epoch start
+        param = "W00010101000000Z00010101000000Z"
+        _LOGGER.info("Cancelling holidays mode for modem %s", modem)
+        return await self._send_command(modem, "changeMode", 1, param)
+
+    async def set_kwh_prices(
+        self, modem: str, kwh_pleine: float, kwh_creuse: float
+    ) -> Any:
+        """
+        Set electricity prices for peak and off-peak hours.
+
+        Args:
+            modem: Device modem ID
+            kwh_pleine: Peak hour price in EUR/kWh
+            kwh_creuse: Off-peak hour price in EUR/kWh
+
+        Returns:
+            API response
+
+        """
+        # Convert to millièmes d'euros (multiply by 1000)
+        pleine_milliemes = int(kwh_pleine * 1000)
+        creuse_milliemes = int(kwh_creuse * 1000)
+
+        # Format: P{prixPlein}C{prixCreux}
+        param = f"P{pleine_milliemes}C{creuse_milliemes}"
+
+        _LOGGER.info(
+            "Setting kWh prices for modem %s: pleine=%.3f EUR/kWh (%d), "
+            "creuse=%.3f EUR/kWh (%d)",
+            modem,
+            kwh_pleine,
+            pleine_milliemes,
+            kwh_creuse,
+            creuse_milliemes,
+        )
+        return await self._send_command(modem, "prixkwh", 1, param)
+
+    async def set_frost_protection_mode(self, modem: str, start_date: str) -> Any:
+        """
+        Set frost protection mode (hors gel) with start date and no end date.
+
+        Args:
+            modem: Device modem ID
+            start_date: Start date in format yyyyMMddHHmmssZ (e.g., 20251220000000Z)
+
+        Returns:
+            API response
+
+        """
+        # Format: W + start_date + 00000000000000Z (no end date for frost protection)
+        param = f"W{start_date}00000000000000Z"
+        _LOGGER.info(
+            "Setting frost protection mode for modem %s from %s",
+            modem,
+            start_date,
+        )
+        return await self._send_command(modem, "changeMode", 1, param)
+
+    async def reset_filter(self, modem: str) -> Any:
+        """Reset filter wear indicator."""
+        _LOGGER.info("Resetting filter for modem %s", modem)
+        async with await self._request_with_auth_interceptor(
+            self._session.patch,
+            f"{self._API_URL_PRODUCTS}/{modem}/resetFilter",
+        ) as response:
+            result = await response.json()
+            _LOGGER.debug("Reset filter response: %s", result)
+            return result
+
     async def _send_command(self, modem: str, method: str, uid: int, param: str) -> Any:
         """Send JSON-RPC command to device."""
-        _LOGGER.debug(
-            "Sending command to modem %s - method: %s, id: %s, param: %s",
-            modem,
+        json_payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "id": uid,
+            "params": [param],
+        }
+        _LOGGER.info(
+            "Sending command: %s to modem %s",
             method,
-            uid,
-            param,
+            modem,
         )
+        _LOGGER.debug("Command payload: %s", json_payload)
         async with await self._request_with_auth_interceptor(
             self._session.post,
             f"{self._API_URL_PRODUCTS}/{modem}/commands",
-            json={
-                "jsonrpc": "2.0",
-                "method": method,
-                "id": uid,
-                "params": [param],
-            },
+            json=json_payload,
         ) as response:
             result = await response.json()
             _LOGGER.debug("Command response: %s", result)
             return result
+
+    async def get_statistics(
+        self, modem: str, start_date: str, end_date: str, granularity: str = "month"
+    ) -> dict[str, Any] | None:
+        """
+        Get device statistics.
+
+        Args:
+            modem: Device modem ID
+            start_date: Start date in format yyyyMMddHHmmssZ (e.g., 20250101000000Z)
+            end_date: End date in format yyyyMMddHHmmssZ (e.g., 20251231235959Z)
+            granularity: Statistics granularity - 'day', 'week', or 'month'
+
+        Returns:
+            Statistics data or None if request fails
+
+        """
+        url = (
+            f"{self._API_URL_PRODUCTS}/{modem}/statistics/"
+            f"{start_date}/{end_date}/{granularity}"
+        )
+
+        try:
+            async with await self._request_with_auth_interceptor(
+                self._session.get,
+                url,
+            ) as response:
+                if response.status == HTTP_OK:
+                    return await response.json()
+                _LOGGER.error("Failed to get statistics: %s", response.status)
+                return None
+        except Exception as e:
+            _LOGGER.error("Error fetching statistics: %s", e)
+            return None
 
 
 class AuthenticationError(Exception):

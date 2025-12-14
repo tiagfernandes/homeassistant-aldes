@@ -1,5 +1,6 @@
 """AldesEntity class."""
 
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -8,17 +9,23 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from custom_components.aldes.const import AirMode, HouseholdComposition, WaterMode
 from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class SettingsApiEntity:
     """Settings Api Entity."""
 
     people: HouseholdComposition | None
     antilegio: int | None
+    kwh_creuse: float | None
+    kwh_pleine: float | None
 
     def __init__(self, data: dict[str, Any] | None) -> None:
         """Initialize."""
         self.people = data["people"] if data else None
         self.antilegio = data["antilegio"] if data else None
+        self.kwh_creuse = data.get("kwh_creuse") if data else None
+        self.kwh_pleine = data.get("kwh_pleine") if data else None
 
 
 class IndicatorApiEntity:
@@ -93,6 +100,13 @@ class DataApiEntity:
     date_last_filter_update: str
     has_filter: bool
     is_connected: bool
+    week_planning: list[dict[str, str]]
+    week_planning2: list[dict[str, str]]
+    week_planning3: list[dict[str, str]]
+    week_planning4: list[dict[str, str]]
+    holidays_start: str | None
+    holidays_end: str | None
+    hors_gel: bool
 
     def __init__(self, data: dict[str, Any] | None) -> None:
         """Initialize."""
@@ -106,6 +120,33 @@ class DataApiEntity:
         self.date_last_filter_update = data["dateLastFilterUpdate"] if data else ""
         self.has_filter = data["hasFilter"] if data else False
         self.is_connected = data["isConnected"] if data else False
+        self.week_planning = data["week_planning"] if data else []
+        self.week_planning2 = data["week_planning2"] if data else []
+        self.week_planning3 = data["week_planning3"] if data else []
+        self.week_planning4 = data["week_planning4"] if data else []
+
+        # Parse holidays dates and frost protection from indicator if available
+        self.holidays_start = None
+        self.holidays_end = None
+        self.hors_gel = False
+        if data and "indicator" in data and data["indicator"]:
+            indicator_data = data["indicator"]
+            self.holidays_start = indicator_data.get("date_debut_vac")
+            self.holidays_end = indicator_data.get("date_fin_vac")
+            self.hors_gel = indicator_data.get("hors_gel", False)
+
+        _LOGGER.info(
+            "DataApiEntity initialized - Device: %s (%s), Serial: %s, Connected: %s, "
+            "Plannings loaded: week_planning=%d, week_planning2=%d, week_planning3=%d, week_planning4=%d",
+            self.reference,
+            self.type,
+            self.serial_number,
+            self.is_connected,
+            len(self.week_planning),
+            len(self.week_planning2),
+            len(self.week_planning3),
+            len(self.week_planning4),
+        )
 
 
 class AldesEntity(CoordinatorEntity):
@@ -129,3 +170,12 @@ class AldesEntity(CoordinatorEntity):
         self.reference = coordinator.data.reference
         self.modem = coordinator.data.modem
         self.is_connected = coordinator.data.is_connected
+
+    @property
+    def name(self) -> str | None:
+        """Return the name of the entity."""
+        return self._friendly_name_internal()
+
+    def _friendly_name_internal(self) -> str | None:
+        """Return the friendly name - to be overridden by subclasses."""
+        return None

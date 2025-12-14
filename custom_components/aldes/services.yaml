@@ -1,0 +1,138 @@
+set_week_planning:
+  name: Set week planning
+  description: Set the week planning for an Aldes device
+  fields:
+    device_id:
+      name: Device ID
+      description: The device ID (optional, will use first device if omitted)
+      required: false
+      selector:
+        device:
+          integration: aldes
+    entity_id:
+      name: Entity ID
+      description: The entity ID (optional, alternative to device_id)
+      required: false
+      selector:
+        entity:
+          integration: aldes
+    planning:
+      name: Planning
+      description: Planning data as a string (e.g., "00C")
+      required: true
+      selector:
+        text:
+    mode:
+      name: Mode
+      description: The program mode (A, B, C, or D)
+      required: false
+      default: A
+      selector:
+        select:
+          options:
+            - A
+            - B
+            - C
+            - D
+
+set_holidays:
+  name: Activer le mode vacances
+  description: Active le mode vacances pour éteindre automatiquement l'appareil pendant la période de vacances
+  fields:
+    device_id:
+      name: ID de l'appareil
+      description: L'ID de l'appareil (optionnel, utilisera le premier appareil si omis)
+      required: false
+      selector:
+        device:
+          integration: aldes
+    entity_id:
+      name: ID de l'entité
+      description: L'ID de l'entité (optionnel, alternative à device_id)
+      required: false
+      selector:
+        entity:
+          integration: aldes
+    start_date:
+      name: Date de début
+      description: Date de début des vacances
+      required: true
+      example: "2025-12-20"
+      selector:
+        date:
+    start_time:
+      name: Heure de début
+      description: Heure de début des vacances (optionnel, défaut 00:00:00)
+      required: false
+      default: "00:00:00"
+      example: "14:30:00"
+      selector:
+        time:
+    end_date:
+      name: Date de fin
+      description: Date de fin des vacances
+      required: true
+      example: "2025-12-31"
+      selector:
+        date:
+    end_time:
+      name: Heure de fin
+      description: Heure de fin des vacances (optionnel, défaut 00:00:00)
+      required: false
+      default: "00:00:00"
+      example: "18:00:00"
+      selector:
+        time:
+
+cancel_holidays:
+  name: Annuler le mode vacances
+  description: Annule le mode vacances et revient au fonctionnement normal
+  fields:
+    device_id:
+      name: ID de l'appareil
+      description: L'ID de l'appareil (optionnel, utilisera le premier appareil si omis)
+      required: false
+      selector:
+        device:
+          integration: aldes
+    entity_id:
+      name: ID de l'entité
+      description: L'ID de l'entité (optionnel, alternative à device_id)
+      required: false
+      selector:
+        entity:
+          integration: aldes
+
+set_frost_protection:
+  name: Activer le mode hors gel
+  description: Active le mode hors gel pour maintenir une température minimale sans date de fin
+  fields:
+    device_id:
+      name: ID de l'appareil
+      description: L'ID de l'appareil (optionnel, utilisera le premier appareil si omis)
+      required: false
+      selector:
+        device:
+          integration: aldes
+    entity_id:
+      name: ID de l'entité
+      description: L'ID de l'entité (optionnel, alternative à device_id)
+      required: false
+      selector:
+        entity:
+          integration: aldes
+    start_date:
+      name: Date de début
+      description: Date de début du mode hors gel
+      required: true
+      example: "2025-12-20"
+      selector:
+        date:
+    start_time:
+      name: Heure de début
+      description: Heure de début du mode hors gel (optionnel, défaut 00:00:00)
+      required: false
+      default: "00:00:00"
+      example: "14:30:00"
+      selector:
+        time:

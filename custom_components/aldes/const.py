@@ -14,9 +14,11 @@ CONF_PASSWORD = "password"  # noqa: S105
 MANUFACTURER = "Aldes"
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
-    Platform.SENSOR,
+    Platform.BUTTON,
     Platform.CLIMATE,
+    Platform.NUMBER,
     Platform.SELECT,
+    Platform.SENSOR,
 ]
 
 FRIENDLY_NAMES = {"TONE_AIR": "T.One® AIR", "TONE_AQUA_AIR": "T.One® AquaAIR"}
