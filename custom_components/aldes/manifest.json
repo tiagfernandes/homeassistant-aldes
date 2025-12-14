@@ -9,6 +9,6 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/tiagfernandes/homeassistant-aldes/issues",
-  "version": "v3.1.0-beta.1",
+  "version": "v3.1.0",
   "reload": "CONFIG_ENTRY"
 }
