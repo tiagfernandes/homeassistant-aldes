@@ -2,10 +2,13 @@
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 from enum import IntEnum
 from typing import Any
 
 import aiohttp
+import backoff
+from aiohttp import ClientError, ClientTimeout
 
 from custom_components.aldes.entity import DataApiEntity
 
@@ -14,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 HTTP_OK = 200
 HTTP_UNAUTHORIZED = 401
 REQUEST_DELAY = 5  # Delay between queued requests in seconds
+CACHE_TTL = 300  # Cache TTL in seconds (5 minutes)
 
 
 class CommandUid(IntEnum):
@@ -39,11 +43,13 @@ class AldesApi:
         self._password = password
         self._session = session
         self._token = ""
+        self._timeout = ClientTimeout(total=30)
+        self._cache: dict[str, Any] = {}
+        self._cache_timestamp: dict[str, datetime] = {}
         self.queue_target_temperature: asyncio.Queue[tuple[str, int, str, Any]] = (
             asyncio.Queue()
         )
-
-        asyncio.create_task(self._temperature_worker())
+        self._temperature_task = asyncio.create_task(self._temperature_worker())
 
     async def authenticate(self) -> None:
         """Authenticate and retrieve access token from Aldes API."""
@@ -54,15 +60,81 @@ class AldesApi:
             "password": self._password,
         }
 
-        async with self._session.post(self._API_URL_TOKEN, data=data) as response:
-            json = await response.json()
-            if response.status == HTTP_OK:
-                self._token = json["access_token"]
-                _LOGGER.info("Successfully authenticated with Aldes API")
+        try:
+            async with self._session.post(
+                self._API_URL_TOKEN, data=data, timeout=self._timeout
+            ) as response:
+                json = await response.json()
+                if response.status == HTTP_OK:
+                    self._token = json["access_token"]
+                    _LOGGER.info("Successfully authenticated with Aldes API")
+                else:
+                    error_msg = f"Authentication failed with status {response.status}"
+                    _LOGGER.error(error_msg)
+                    raise AuthenticationError(error_msg)
+        except (ClientError, TimeoutError) as err:
+            error_msg = f"Authentication request failed: {err}"
+            _LOGGER.exception(error_msg)
+            raise AuthenticationError(error_msg) from err
+
+    @backoff.on_exception(
+        backoff.expo,
+        (ClientError, TimeoutError),
+        max_tries=3,
+        max_time=60,
+    )
+    async def _api_request(
+        self, method: str, url: str, **kwargs: Any
+    ) -> list[Any] | dict[str, Any]:
+        """Execute API request with retry, timeout and error handling."""
+        # Generate cache key from method and url
+        cache_key = f"{method}:{url}"
+
+        try:
+            # Add timeout to kwargs if not already present
+            if "timeout" not in kwargs:
+                kwargs["timeout"] = self._timeout
+
+            request_func = getattr(self._session, method.lower())
+            async with await self._request_with_auth_interceptor(
+                request_func, url, **kwargs
+            ) as response:
+                if response.status == HTTP_OK:
+                    data = await response.json()
+                    # Store in cache for emergency fallback
+                    self._cache[cache_key] = data
+                    self._cache_timestamp[cache_key] = datetime.now(UTC)
+                    _LOGGER.debug("Stored data in emergency cache for %s", cache_key)
+                    return data
+                msg = f"API request failed with status {response.status}"
+                _LOGGER.error(msg)
+                raise ClientError(msg)
+        except Exception as err:
+            # Log specific error type
+            if isinstance(err, ClientError | TimeoutError):
+                _LOGGER.exception("API request error")
+            elif isinstance(err, KeyError | ValueError):
+                _LOGGER.exception("Error parsing API response")
             else:
-                error_msg = f"Authentication failed with status {response.status}"
-                _LOGGER.error(error_msg)
-                raise AuthenticationError(error_msg)
+                _LOGGER.exception("Unexpected error during API request")
+
+            # Use cached data as fallback for ANY error (regardless of age)
+            if cache_key in self._cache:
+                cache_age = datetime.now(UTC) - self._cache_timestamp.get(
+                    cache_key, datetime.min.replace(tzinfo=UTC)
+                )
+                _LOGGER.warning(
+                    "Using cached data as fallback due to error: %s (age: %s)",
+                    type(err).__name__,
+                    cache_age,
+                )
+                return self._cache[cache_key]
+
+            # No cache available, propagate the error
+            if isinstance(err, KeyError | ValueError):
+                msg = f"Invalid API response: {err}"
+                raise ClientError(msg) from err
+            raise
 
     async def change_mode(self, modem: str, mode: str, uid: CommandUid) -> Any:
         """Change mode (air or hot water)."""
@@ -73,15 +145,21 @@ class AldesApi:
     async def fetch_data(self) -> Any:
         """Fetch data."""
         _LOGGER.debug("Fetching data from Aldes API...")
-        async with await self._request_with_auth_interceptor(
-            self._session.get, self._API_URL_PRODUCTS
-        ) as response:
-            data = await response.json()
+        try:
+            data = await self._api_request("get", self._API_URL_PRODUCTS)
+        except (ClientError, TimeoutError):
+            _LOGGER.exception("Failed to fetch data")
+            return None
+        else:
             _LOGGER.debug("Fetched data: %s", data)
 
             if isinstance(data, list) and len(data) > 0:
-                _LOGGER.debug("Successfully retrieved Aldes device data")
-                return DataApiEntity(data[0])
+                # Type narrowing: data is list[Any], so data[0] is Any
+                # We check if it's a dict before passing to DataApiEntity
+                first_item: Any = data[0]
+                if isinstance(first_item, dict):
+                    _LOGGER.debug("Successfully retrieved Aldes device data")
+                    return DataApiEntity(first_item)
 
             _LOGGER.warning("No data received from Aldes API")
             return None
@@ -128,18 +206,22 @@ class AldesApi:
             thermostat_name,
             target_temperature,
         )
-        async with await self._request_with_auth_interceptor(
-            self._session.patch,
-            f"{self._API_URL_PRODUCTS}/{modem}/updateThermostats",
-            json=[
-                {
-                    "ThermostatId": thermostat_id,
-                    "Name": thermostat_name,
-                    "TemperatureSet": int(target_temperature),
-                }
-            ],
-        ) as response:
-            result = await response.json()
+        try:
+            result = await self._api_request(
+                "patch",
+                f"{self._API_URL_PRODUCTS}/{modem}/updateThermostats",
+                json=[
+                    {
+                        "ThermostatId": thermostat_id,
+                        "Name": thermostat_name,
+                        "TemperatureSet": int(target_temperature),
+                    }
+                ],
+            )
+        except (ClientError, TimeoutError):
+            _LOGGER.exception("Failed to change temperature")
+            raise
+        else:
             _LOGGER.debug("Temperature change response: %s", result)
             return result
 
@@ -279,11 +361,15 @@ class AldesApi:
     async def reset_filter(self, modem: str) -> Any:
         """Reset filter wear indicator."""
         _LOGGER.info("Resetting filter for modem %s", modem)
-        async with await self._request_with_auth_interceptor(
-            self._session.patch,
-            f"{self._API_URL_PRODUCTS}/{modem}/resetFilter",
-        ) as response:
-            result = await response.json()
+        try:
+            result = await self._api_request(
+                "patch",
+                f"{self._API_URL_PRODUCTS}/{modem}/resetFilter",
+            )
+        except (ClientError, TimeoutError):
+            _LOGGER.exception("Failed to reset filter")
+            raise
+        else:
             _LOGGER.debug("Reset filter response: %s", result)
             return result
 
@@ -301,18 +387,22 @@ class AldesApi:
             modem,
         )
         _LOGGER.debug("Command payload: %s", json_payload)
-        async with await self._request_with_auth_interceptor(
-            self._session.post,
-            f"{self._API_URL_PRODUCTS}/{modem}/commands",
-            json=json_payload,
-        ) as response:
-            result = await response.json()
+        try:
+            result = await self._api_request(
+                "post",
+                f"{self._API_URL_PRODUCTS}/{modem}/commands",
+                json=json_payload,
+            )
+        except (ClientError, TimeoutError):
+            _LOGGER.exception("Failed to send command %s", method)
+            raise
+        else:
             _LOGGER.debug("Command response: %s", result)
             return result
 
     async def get_statistics(
         self, modem: str, start_date: str, end_date: str, granularity: str = "month"
-    ) -> dict[str, Any] | None:
+    ) -> list[Any] | dict[str, Any] | None:
         """
         Get device statistics.
 
@@ -332,16 +422,9 @@ class AldesApi:
         )
 
         try:
-            async with await self._request_with_auth_interceptor(
-                self._session.get,
-                url,
-            ) as response:
-                if response.status == HTTP_OK:
-                    return await response.json()
-                _LOGGER.error("Failed to get statistics: %s", response.status)
-                return None
-        except Exception as e:
-            _LOGGER.error("Error fetching statistics: %s", e)
+            return await self._api_request("get", url)
+        except (ClientError, TimeoutError):
+            _LOGGER.exception("Failed to get statistics")
             return None
 
 

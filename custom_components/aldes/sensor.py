@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
+from homeassistant.const import (
+    EVENT_HOMEASSISTANT_STARTED,
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.util import dt as dt_util
@@ -479,7 +484,19 @@ class BaseStatisticsSensor(BaseAldesSensorEntity):
     async def async_added_to_hass(self) -> None:
         """Run when entity is added to hass."""
         await super().async_added_to_hass()
-        self._fetch_task = self.hass.async_create_task(self._fetch_statistics_loop())
+
+        # Start statistics fetch only after Home Assistant is fully started
+        # to avoid slowing down the startup process
+        @callback
+        def _start_statistics_fetch(_event: Any) -> None:
+            """Start fetching statistics after HA startup."""
+            self._fetch_task = self.hass.async_create_task(
+                self._fetch_statistics_loop()
+            )
+
+        self.hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED, _start_statistics_fetch
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         """Cancel the update task when entity is removed."""
