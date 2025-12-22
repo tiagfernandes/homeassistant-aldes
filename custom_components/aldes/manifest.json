@@ -12,6 +12,6 @@
   "requirements": [
     "backoff>=2.2.1"
   ],
-  "version": "v3.1.0",
+  "version": "v3.2.0",
   "reload": "CONFIG_ENTRY"
 }
