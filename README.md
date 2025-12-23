@@ -80,3 +80,5 @@ Pour utiliser la carte de planning avec grille éditable :
 
 - <https://github.com/guix77/esphome-aldes-tone> : Connexion du produit T.One avec ESPHome
 - <https://github.com/Fredzxda/homeassistant-aldes> : EASYHOME PureAir Compact CONNECT
+
+<a href="https://www.buymeacoffee.com/tiagfernandes" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: auto !important;width: auto !important;"></a>
