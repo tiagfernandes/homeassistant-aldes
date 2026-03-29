@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import ClimateEntity
@@ -16,8 +17,8 @@ from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.util import dt as dt_util
 
-from custom_components.aldes.api import CommandUid
 from custom_components.aldes.const import (
     DOMAIN,
     ECO_MODE_TEMPERATURE_OFFSET,
@@ -102,12 +103,22 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             | ClimateEntityFeature.TURN_OFF
             | ClimateEntityFeature.TURN_ON
         )
-        self._attr_target_temperature_step = 1
+        self._attr_target_temperature_step = 1.0
+        self._attr_precision = 1.0
         self._attr_hvac_action = HVACAction.OFF
         # Store effective mode for use in temperature calculations
         self._effective_air_mode: AirMode | None = None
         self._retry_task: asyncio.Task | None = None
         self._retry_mode_task: asyncio.Task | None = None
+        
+        # Optimistic state management
+        self._optimistic_target_temp: float | None = None
+        self._optimistic_hvac_mode: HVACMode | None = None
+        self._optimistic_end_time: datetime | None = None
+        
+        # Track pending changes
+        self._pending_temperature_change: dict[str, Any] | None = None
+        self._pending_mode_change: dict[str, Any] | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -126,13 +137,10 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
 
     def _get_current_time_slot(self) -> str:
         """Get current time slot character (0-9, A-N for hours 0-23)."""
-        from homeassistant.util import dt
-
-        now = dt.now()
+        now = dt_util.now()
         # Hours: 0-9 = '0'-'9', 10-23 = 'A'-'N'
         hour = now.hour
         # For now, return just the hour character
-        # If half-hours need different encoding, adjust here
         return (
             str(hour)
             if hour < HOUR_TO_CHAR_THRESHOLD
@@ -141,9 +149,7 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
 
     def _get_current_day(self) -> int:
         """Get current day of week (0=Lundi, ..., 5=Samedi, 6=Dimanche)."""
-        from homeassistant.util import dt
-
-        now = dt.now()
+        now = dt_util.now()
         # weekday() returns 0=Monday, 6=Sunday
         # Format Aldes: 0=Lundi, 1=Mardi, ..., 6=Dimanche
         return now.weekday()
@@ -469,16 +475,15 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
             self.modem, self.thermostat.id, self.thermostat.name, pac_target
         )
 
-        # Store internal value for display in Home Assistant
+        # --- ENABLE OPTIMISTIC STATE ---
+        self._optimistic_target_temp = target_temperature
+        self._optimistic_end_time = dt_util.now() + timedelta(
+            seconds=OPTIMISTIC_HOLD_DURATION
+        )
+
+        # Update internal state immediately
         self._attr_target_temperature = target_temperature
-
-        # Update HVAC action immediately based on new target temperature
         self._attr_hvac_action = self._determine_hvac_action(effective_mode)
-
-        # Prevent coordinator from overwriting pending update
-        self.coordinator.skip_next_update = True
-
-        # Update Home Assistant state
         self.async_write_ha_state()
 
         # Cancel any existing retry task
@@ -532,8 +537,14 @@ class AldesClimateEntity(AldesEntity, ClimateEntity):
         await self.coordinator.api.change_mode(
             self.modem, air_mode.value, CommandUid.AIR_MODE
         )
+
+        # --- ENABLE OPTIMISTIC STATE ---
+        self._optimistic_hvac_mode = hvac_mode
+        self._optimistic_end_time = dt_util.now() + timedelta(
+            seconds=OPTIMISTIC_HOLD_DURATION
+        )
+
         self._attr_hvac_mode = hvac_mode
-        self.coordinator.skip_next_update = True
         self.async_write_ha_state()
 
         # Cancel any existing retry task

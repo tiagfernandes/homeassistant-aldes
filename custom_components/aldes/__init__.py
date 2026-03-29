@@ -21,7 +21,13 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .api import AldesApi
-from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN, PLATFORMS
+from .const import (
+    CONF_PASSWORD,
+    CONF_PERFORMANCE_LOGS,
+    CONF_USERNAME,
+    DOMAIN,
+    PLATFORMS,
+)
 from .coordinator import AldesDataUpdateCoordinator
 from .entity import DataApiEntity
 
@@ -45,8 +51,23 @@ def coerce_time(value: str | dt_time | None) -> dt_time:
     return dt_time(0, 0, 0)
 
 
+def _update_log_level(entry: ConfigEntry) -> None:
+    """Update log level based on configuration."""
+    performance_logs = entry.options.get(CONF_PERFORMANCE_LOGS, False)
+    api_logger = logging.getLogger("custom_components.aldes.api")
+    if performance_logs:
+        api_logger.setLevel(logging.DEBUG)
+        _LOGGER.info("Performance logs enabled for Aldes API")
+    else:
+        # Restore default level (usually NOTSET which inherits from parent)
+        api_logger.setLevel(logging.NOTSET)
+        _LOGGER.debug("Performance logs disabled for Aldes API")
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Aldes from a config entry."""
+    _update_log_level(entry)
+
     token = entry.options.get("token", "")
     api = AldesApi(
         entry.data[CONF_USERNAME],
@@ -94,6 +115,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
     _LOGGER.info("Reloading Aldes integration...")
+    _update_log_level(entry)
     await async_unload_entry(hass, entry)
     await async_setup_entry(hass, entry)
 

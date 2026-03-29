@@ -23,9 +23,89 @@ Cette intégration permet d'ajouter le produit Aldes T.One à Home Assistant via
 | **Surveillance du filtre**                                                                                                                                                                                                     |       ✔️        |         ✔️          |
 | **Carte de planning**                                                                                                                                                                                                          |       ✔️        |         ✔️          |
 
+## Stabilité et Robustesse
+
+Cette intégration a été renforcée pour garantir une connexion stable et sécurisée avec le cloud Aldes :
+
+- **Authentification "Officielle"** : Utilisation des en-têtes (User-Agent, API Key) et de la signature de l'application Android officielle pour éviter les blocages de sécurité (WAF) et garantir la pérennité de l'accès.
+- **Résilience Réseau** : Intégration d'un système de réessai automatique (Backoff exponentiel) qui gère les micro-coupures ou les lenteurs de l'API sans faire planter l'intégration.
+- **File d'attente intelligente** : Les changements de température multiples (ex: changement de mode global) sont traités séquentiellement via un worker dédié pour ne jamais surcharger l'API Aldes.
+- **Sécurité des Logs** : Masquage automatique des mots de passe et données sensibles dans les journaux de débogage.
+
+## Expérience Utilisateur (UX)
+
+- **Zéro Latence (Optimistic State)** : L'interface réagit instantanément à vos commandes. Plus d'effet "flip-flop" où la température revient à l'ancienne valeur pendant quelques secondes. L'intégration maintient l'état souhaité localement en attendant la confirmation du Cloud Aldes.
+- **Persévérance (Auto-Retry)** : Si le Cloud Aldes ne prend pas en compte votre commande immédiatement (perte de message silencieuse), l'intégration le détecte automatiquement après 1 minute et renvoie la commande (jusqu'à 3 fois), tout en maintenant l'affichage correct pour l'utilisateur.
+
+## 🧪 Test Autonome (Sans Home Assistant)
+
+Pour tester l'intégration **sans Home Assistant**, un outil de menu interactif est disponible :
+
+### Démarrage rapide
+
+**Windows:**
+```cmd
+python test_standalone.py
+```
+
+**Linux/MacOS:**
+```bash
+python3 test_standalone.py
+```
+
+### Fonctionnalités
+
+✔️ S'authentifier avec Aldes Connect  
+✔️ Récupérer les informations du compte  
+✔️ Afficher les thermostats et pièces  
+✔️ Modifier la température  
+✔️ Changer le mode air (Confort, Éco, Programme...)  
+✔️ Contrôler le mode eau chaude (T.One AquaAIR)
+
+📖 [Voir la documentation complète](TEST_STANDALONE_README.md)
+
+## 🧪 Test Autonome (Sans Home Assistant)
+
+Pour tester l'intégration **sans Home Assistant**, un outil de menu interactif est disponible :
+
+### Démarrage rapide
+
+**Windows:**
+```cmd
+python test_standalone.py
+```
+
+**Linux/MacOS:**
+```bash
+python3 test_standalone.py
+```
+
+### Fonctionnalités
+
+✔️ S'authentifier avec Aldes Connect  
+✔️ Récupérer les informations du compte  
+✔️ Afficher les thermostats et pièces  
+✔️ Modifier la température  
+✔️ Changer le mode air (Confort, Éco, Programme...)  
+✔️ Contrôler le mode eau chaude (T.One AquaAIR)
+
+📖 [Voir la documentation complète](TEST_STANDALONE_README.md)
+
+### 🆘 Pas de données affichées?
+
+Si vous voyez "Aucune pièce trouvée" ou "Aucun thermostat trouvé":
+
+1. **Diagnostiquer:** `python debug_api_response.py`
+2. **Corriger automatiquement:** `python autofix_parse.py`
+3. **Documenter:** Consultez `QUICK_FIX.md`
+
 ## Installation
 
 Dans HACS, ajoutez le dépôt personnalisé <https://github.com/tiagfernandes/homeassistant-aldes> et sélectionnez la catégorie Intégration.
+
+## ⚠️ Avertissement Légal
+
+**Cette intégration n'est pas officielle et n'a aucun lien avec Aldes.** Elle est développée et maintenue par la communauté. Les créateurs et contributeurs de cette intégration ne sont pas responsables des dysfonctionnements, pertes de données, dommages matériels ou immatériels qui pourraient résulter de son utilisation. Utilisez-la à vos risques et périls.
 
 ## Configuration
 

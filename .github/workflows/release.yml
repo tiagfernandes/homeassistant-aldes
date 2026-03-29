@@ -1,0 +1,28 @@
+name: Create Release ZIP
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  attach-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create ZIP with correct structure
+        run: |
+          # Créer le ZIP avec seulement custom_components/ à la racine
+          zip -r aldes-${{ github.event.release.tag_name }}.zip custom_components/
+          
+          # Optionnel : vérifier la structure du ZIP créé
+          echo "Structure du ZIP créé:"
+          unzip -l aldes-${{ github.event.release.tag_name }}.zip
+
+      - name: Upload ZIP to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: aldes-${{ github.event.release.tag_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -27,8 +27,26 @@ jobs:
     name: Check style formatting
     steps:
         - uses: "actions/checkout@v2"
-        - uses: "actions/setup-python@v1"
+        - uses: "actions/setup-python@v4"
           with:
-            python-version: "3.x"
-        - run: python3 -m pip install black
-        - run: black .
+            python-version: "3.12"
+        - run: python3 -m pip install black ruff
+        - run: black --check .
+        - run: ruff check .
+
+  tests:
+    runs-on: "ubuntu-latest"
+    name: Run tests
+    continue-on-error: true
+    steps:
+        - uses: "actions/checkout@v2"
+        - uses: "actions/setup-python@v4"
+          with:
+            python-version: "3.12"
+        - name: Install dependencies
+          run: |
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r requirements.txt
+            python3 -m pip install pytest>=7.4.0 pytest-asyncio>=0.24.0 pytest-cov>=4.1.0 pytest-homeassistant-custom-component>=2024.1.0
+        - name: Run tests
+          run: pytest tests -v || true

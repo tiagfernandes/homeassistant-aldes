@@ -1,7 +1,5 @@
 """Constants for aldes."""
 
-from enum import StrEnum
-
 from homeassistant.const import Platform
 
 NAME = "Aldes"
@@ -9,7 +7,8 @@ DOMAIN = "aldes"
 VERSION = "0.0.1"
 
 CONF_USERNAME = "username"
-CONF_PASSWORD = "password"  # noqa: S105
+CONF_PASSWORD = "password"
+CONF_PERFORMANCE_LOGS = "performance_logs"
 
 MANUFACTURER = "Aldes"
 PLATFORMS: list[Platform] = [

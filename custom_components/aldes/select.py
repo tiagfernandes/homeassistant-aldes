@@ -12,15 +12,18 @@ from homeassistant.const import (
 )
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from .api import CommandUid
+from custom_components.aldes.models import (
+    AirMode,
+    AntilegionellaCycle,
+    CommandUid,
+    HouseholdComposition,
+    WaterMode,
+)
+
 from .const import (
     DOMAIN,
     FRIENDLY_NAMES,
     MANUFACTURER,
-    AirMode,
-    AntilegionellaCycle,
-    HouseholdComposition,
-    WaterMode,
 )
 from .entity import AldesEntity, DeviceContext
 
@@ -123,6 +126,8 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
             AirMode.COOL_PROG_B: "Rafraîchissement Prog B",
         }
         self._retry_mode_task: asyncio.Task | None = None
+        # Track pending mode changes for retry mechanism
+        self._pending_mode_change: dict[str, Any] | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -202,6 +207,11 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
         if self._retry_mode_task and not self._retry_mode_task.done():
             self._retry_mode_task.cancel()
 
+        # Store the pending change for retry verification
+        self._pending_mode_change = {
+            "expected_mode": selected_option,
+        }
+
         # Schedule retry check
         self._retry_mode_task = asyncio.create_task(
             self._verify_air_mode_change_after_delay()
@@ -213,24 +223,56 @@ class AldesAirModeEntity(AldesEntity, SelectEntity):
 
     async def _verify_air_mode_change_after_delay(self) -> None:
         """Verify air mode change after delay and retry if needed."""
-        # Store expected mode for closure
-        expected_mode = self._attr_current_option
+        try:
+            await asyncio.sleep(60)
 
-        if expected_mode is None:
-            return
+            if not self._pending_mode_change:
+                return
 
-        def get_current_mode() -> AirMode:
-            """Get current air mode from device."""
+            # Force a coordinator refresh to get latest data
+            await self.coordinator.async_request_refresh()
+
+            # Wait a bit for the refresh to complete
+            await asyncio.sleep(2)
+
+            # Check if coordinator data is available
+            if self.coordinator.data is None:
+                _LOGGER.warning(
+                    "Coordinator data is None, cannot verify air mode change"
+                )
+                self._pending_mode_change = None
+                return
+
+            expected_mode = self._pending_mode_change["expected_mode"]
             device = self._get_device()
             if device is None or device.indicator is None:
-                return AirMode.OFF
-            return device.indicator.current_air_mode
+                return
+            current_mode = device.indicator.current_air_mode
 
-        async def retry_mode() -> None:
-            """Retry changing the mode."""
-            await self.coordinator.api.change_mode(
-                self.modem, expected_mode.value, CommandUid.AIR_MODE
-            )
+            # If the mode hasn't changed, retry the API call
+            if current_mode != expected_mode:
+                _LOGGER.warning(
+                    "Air mode not updated after 1 minute (expected: %s, actual: %s). Retrying API call...",
+                    expected_mode,
+                    current_mode,
+                )
+
+                # Retry the API call
+                await self.coordinator.api.change_mode(
+                    self.modem, expected_mode.value, CommandUid.AIR_MODE
+                )
+
+                # Force another refresh after retry
+                await asyncio.sleep(2)
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.debug(
+                    "Air mode successfully updated to %s",
+                    expected_mode,
+                )
+
+            # Clear pending change
+            self._pending_mode_change = None
 
         # Use generic verification method
         await self._verify_state_change_after_delay(
@@ -266,6 +308,8 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
             WaterMode.BOOST: "Boost",
         }
         self._retry_water_mode_task: asyncio.Task | None = None
+        # Track pending mode changes for retry mechanism
+        self._pending_water_mode_change: dict[str, Any] | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -346,6 +390,11 @@ class AldesWaterModeEntity(AldesEntity, SelectEntity):
         # Cancel any existing retry task
         if self._retry_water_mode_task and not self._retry_water_mode_task.done():
             self._retry_water_mode_task.cancel()
+
+        # Store the pending change for retry verification
+        self._pending_water_mode_change = {
+            "expected_mode": selected_option,
+        }
 
         # Schedule retry check
         self._retry_water_mode_task = asyncio.create_task(

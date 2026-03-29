@@ -14,7 +14,7 @@ from .const import DOMAIN
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from custom_components.aldes.entity import DataApiEntity
+    from custom_components.aldes.models import DataApiEntity
 
     from .api import AldesApi
 

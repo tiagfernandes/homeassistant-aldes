@@ -17,6 +17,7 @@ from custom_components.aldes.const import (
     WaterMode,
 )
 from custom_components.aldes.coordinator import AldesDataUpdateCoordinator
+from custom_components.aldes.models import DataApiEntity
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -2,7 +2,8 @@
   "domain": "aldes",
   "name": "Aldes",
   "codeowners": [
-    "@tiagfernandes"
+    "@tiagfernandes",
+    "@saniho"
   ],
   "config_flow": true,
   "documentation": "https://github.com/tiagfernandes/homeassistant-aldes",

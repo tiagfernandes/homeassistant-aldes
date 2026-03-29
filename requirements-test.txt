@@ -1,0 +1,7 @@
+# Test dependencies for Home Assistant Custom Component
+pytest>=7.4.0
+pytest-asyncio>=0.24.0
+pytest-cov>=4.1.0
+pytest-homeassistant-custom-component>=2024.1.0
+homeassistant==2024.12.0
+
